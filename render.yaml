@@ -1,0 +1,31 @@
+# Render Blueprint: game server (free Node web service) + client (free static site).
+# Every push to main redeploys both.
+services:
+  - type: web
+    name: rts-template-server
+    runtime: node
+    plan: free
+    region: ohio
+    branch: main
+    buildCommand: npm ci && npm run build:server
+    startCommand: npm run start:server
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+
+  - type: web
+    name: rts-template-client
+    runtime: static
+    branch: main
+    buildCommand: npm ci && npm run build:client
+    staticPublishPath: client/dist
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "22"
+      # Single config value for the server address (GDD rule). If Render gives the
+      # server a different URL, change it here or in the Render dashboard.
+      - key: VITE_SERVER_URL
+        value: wss://rts-template-server.onrender.com
