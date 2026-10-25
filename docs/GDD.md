@@ -1,0 +1,298 @@
+# RTS Template — Game Design Document
+
+Last updated 2026-10-25 · Owner: Marz
+
+> This file is the source of truth for the template. If it disagrees with any other copy (chat drafts, docs elsewhere), this file wins.
+
+## How to use this template
+
+This is the reference design for every RTS built from this repo: a minimal two-player browser RTS that proves online multiplayer, plus the rules any future RTS must keep. The proof-of-concept game (one Town Hall, one Barracks, one Soldier) is deliberately small; the architecture is the product.
+
+The document has two layers:
+
+- **Template core** (sections marked *Core*): architecture, simulation, commands, networking, project layout, deployment and testing. Future games reuse these unchanged. Changing a Core rule is a deliberate decision recorded in the Decision log.
+- **Game layer** (sections marked *Game layer*): content, stats, map and win condition. Every new game replaces this layer.
+
+**Starting a new game from this template:** copy the repo, keep every Core section, rewrite the Game layer section, and add the new game's decisions to the Decision log.
+
+### Rules for AI sessions
+
+Any AI session working on this repo or a game built from it must:
+
+1. Read this document before proposing designs or writing code.
+2. Treat **MUST** rules as invariants. If a task seems to require breaking one, stop and raise it instead of working around it.
+3. Treat **SHOULD** rules as strong defaults that can be changed with a stated reason.
+4. Keep each pull request to one milestone issue, and keep game content in data files rather than code.
+5. Update this document in the same pull request when a change affects anything it describes.
+
+## Proof of concept scope *(Core)*
+
+The PoC is done when two people on different networks, each in a browser, can play a full match from lobby to victory screen with responsive controls and both seeing the same result.
+
+**Definition of done:**
+
+- [ ] Player 1 creates a room and gets a short room code; Player 2 joins with it.
+- [ ] Both players issue commands and see each other's units act on them.
+- [ ] Clicks are acknowledged instantly on screen, even at 150 ms round-trip latency.
+- [ ] Combat resolves identically for both players.
+- [ ] Destroying the enemy Town Hall ends the match with a win/lose screen for each player.
+- [ ] A player who disconnects for more than 30 seconds forfeits.
+- [ ] The client shows a clear message while the server wakes from sleep.
+
+**Out of scope for the PoC:** workers and harvesting, building placement, fog of war, more than two players, matchmaking, accounts, reconnection to a match in progress, client-side movement prediction, sound beyond click feedback, and art beyond simple shapes.
+
+## Architecture invariants *(Core)*
+
+The server owns the only real game; clients send commands and draw what the server tells them. Every rule below is a **MUST**.
+
+1. **Server-authoritative.** The game server runs the one true simulation. Clients never change game state directly, and the server never trusts a client's claim about state.
+2. **Commands as data.** Every player action is a command: a small data object sent to the server, validated, and applied on the next tick. Input handling, AI opponents, replays and tests all produce the same commands.
+3. **Simulation separate from presentation.** Simulation code has no nodes for sprites, sound, input or UI, and never reads from them. Presentation reads simulation state and draws it. The simulation must run headless.
+4. **Fixed tick.** The simulation advances in fixed steps of 50 ms (20 ticks per second), independent of frame rate. All durations and speeds in data files are in seconds and converted to ticks at load.
+5. **One project, two exports.** Server and client are the same Godot project sharing the same simulation code. The server is a headless Linux export; the client is a web export.
+6. **Data-driven content.** Units, buildings and costs are defined in resource files, not in code. Adding a unit type requires no simulation code change unless it needs a new ability.
+7. **Portable server.** The server ships as a Docker container, so hosting can move between providers without code changes.
+8. **Engine version pinned.** The Godot version is recorded in the repo (see `.godot-version`) and changed only by a deliberate upgrade pull request.
+
+```mermaid
+flowchart LR
+    subgraph Client["Browser client (web export)"]
+        Input["Input<br/>clicks to commands, instant markers"]
+        Pres["Presentation<br/>interpolates snapshots, draws world"]
+    end
+    subgraph Server["Game server (headless, Docker)"]
+        Val["Validate commands<br/>ownership, cost, cap; else dropped"]
+        Sim["Simulation, 20 ticks/s<br/>income, production, combat, win"]
+        Snap["Snapshot<br/>full state sent to both players"]
+    end
+    Input -- "commands over wss" --> Val
+    Val --> Sim --> Snap
+    Snap -- "snapshots, 20 per second" --> Pres
+    Shared[("Shared by both exports: sim/ and data/")]
+```
+
+The client never changes the world itself: its clicks become commands, and what it draws comes only from server snapshots.
+
+## Simulation model *(Core)*
+
+The simulation is a plain state object advanced one tick at a time by a fixed sequence of systems.
+
+**World state** holds the tick number, each player's resources and status, and a dictionary of entities keyed by integer ID. The server assigns IDs and never reuses them within a match.
+
+**Entities** have an ID, an owner, a type ID pointing at its definition, a position, current HP, and optional components: `mover` (target, speed), `attacker` (target, cooldown), `producer` (queue, progress) and `income` (amount per second). Systems act on whichever components an entity has.
+
+**Definitions** are Godot resources (`.tres`) in `data/`, one per unit or building type, holding cost, HP, speed, damage, range, attack interval, build time and which components it gets. A game's whole roster lives here.
+
+**Tick order** (SHOULD stay stable, since order affects outcomes):
+
+1. Apply queued commands, in arrival order, after validation.
+2. Income: add resources.
+3. Production: advance queues; spawn finished units at the building's rally point.
+4. Targeting: idle and attack-moving units acquire the nearest enemy in sight range.
+5. Movement: move toward targets; apply simple separation so units don't stack.
+6. Combat: units in range with a ready cooldown deal damage.
+7. Deaths: remove entities at 0 HP and clear references to them.
+8. Win check: a player with no Town Hall loses.
+
+**Movement** in the PoC is straight-line with separation on an open map. Pathfinding is an extension point, added behind the movement system without changing commands.
+
+**Randomness**, if ever needed, MUST come from a seeded generator owned by the simulation, so tests and replays are reproducible.
+
+## Command protocol *(Core)*
+
+Six commands cover the PoC; every one is validated by the server and silently dropped if invalid.
+
+Each command carries `type`, a client-side sequence number `seq` (so the client can match acknowledgments), and its arguments. The server stamps the sending player's ID itself; a `player_id` sent by a client is ignored.
+
+| Command | Arguments | Server validation |
+| --- | --- | --- |
+| `move` | unit IDs, target position | Units exist, belong to sender, can move; position clamped to map |
+| `attack` | unit IDs, target entity ID | Units belong to sender; target exists and is an enemy |
+| `attack_move` | unit IDs, target position | As `move`; units engage enemies met on the way |
+| `stop` | unit IDs | Units belong to sender |
+| `train` | building ID, unit type ID | Building belongs to sender and can produce that type; sender can afford it; queue not full; unit cap not reached |
+| `set_rally` | building ID, position | Building belongs to sender and is a producer |
+
+Rules:
+
+- Commands MUST describe intent, never results. `move` says where to go, not where a unit now is.
+- Unit ID lists SHOULD be capped (64 per command) to bound message size.
+- New commands are added by defining the schema here, a validator, and an apply function. Nothing else in the network layer changes.
+
+## Network protocol *(Core)*
+
+Clients talk to the server over secure WebSockets; commands go up, full-state snapshots come down 20 times a second.
+
+**Transport.** `WebSocketMultiplayerPeer` over `wss://` (browsers cannot use Godot's default UDP transport, and an HTTPS page requires secure sockets). TLS is terminated by the host. Messages SHOULD go through a thin `NetProtocol` layer so the transport can be swapped (for example to WebRTC) without touching game code.
+
+**Rooms.** One server process hosts many rooms. Each room has its own simulation, a 4-letter code, and exactly two player slots. Lifecycle: `waiting` (one player) → `countdown` (both connected, 3 seconds) → `playing` → `ended`. Ended or empty rooms are deleted after 60 seconds.
+
+**Messages:**
+
+| Direction | Message | Purpose |
+| --- | --- | --- |
+| Client → server | `create_room` | Make a room, receive its code |
+| Client → server | `join_room` | Join by code |
+| Client → server | `command` | One command (see Command protocol) |
+| Client → server | `ping` | Latency measurement |
+| Server → client | `room_state` | Lobby status, player slot, countdown |
+| Server → client | `match_start` | Map, starting entities, assigned player ID |
+| Server → client | `snapshot` | Tick number, last applied `seq` per player, full entity and resource state |
+| Server → client | `match_end` | Winner and reason |
+| Server → client | `pong` | Latency reply |
+
+**Snapshots.** The PoC sends the full state every tick (20 Hz). Delta compression is an extension point for when unit counts grow.
+
+**Interpolation.** Clients render about 100 ms behind the newest snapshot and interpolate positions between the two snapshots around that time. This hides jitter at the cost of a small, constant delay.
+
+**Disconnects.** A player whose socket closes during a match has 30 seconds before forfeiting; the opponent sees a countdown. Reconnecting into that window is out of scope for the PoC, so in practice a disconnect is a loss.
+
+## Client presentation and UX *(Core)*
+
+The client must feel instant even though nothing happens until the server confirms it: acknowledge every input the moment it is made.
+
+**Controls (standard RTS conventions, SHOULD keep):**
+
+- Left-click selects a unit or building; drag selects a box of own units; Shift adds to selection.
+- Right-click on ground: `move`. Right-click on an enemy: `attack`. `A` then left-click: `attack_move`. `S`: `stop`.
+- With a Barracks selected: a Train button (and hotkey `Q`) sends `train`; right-click on ground sends `set_rally`.
+- Camera pans with edge scrolling and arrow keys; the PoC map fits about two screens wide.
+
+**Instant feedback (MUST).** On any command, immediately show a marker at the click point (green for move, red for attack) and play a short click sound, before the server responds. Training shows the queued unit at once, greyed out until the snapshot confirms it.
+
+**HUD:** gold, unit count against cap, the selected entity's HP and production queue, ping in milliseconds, and the room code while waiting.
+
+**Readability:** each player has one team colour on every entity they own; HP bars show above damaged entities; the local player is always blue and on the left of the map for orientation.
+
+**Server wake screen (MUST).** If the server does not answer within 2 seconds, show "Waking up the server, this can take up to a minute" with a progress indicator, and keep retrying. Never show a silent hang or a raw connection error during a cold start.
+
+## Game layer: PoC ruleset *(Game layer — replace per game)*
+
+Each player starts with a Town Hall, a Barracks and 150 gold; gold flows in passively, Soldiers are trained and sent to fight, and the first player to destroy the enemy Town Hall wins.
+
+The ruleset is small on purpose but still a game: the economy decision is when to spend versus save for a bigger push, and the tactical decision is where and when to fight. Workers are left out because harvesting adds pathing and AI work without proving anything new about networking. The Barracks is pre-placed so the PoC skips building placement.
+
+| Entity | Cost (gold) | HP | Build time (s) | Speed (px/s) | Damage | Attack interval (s) | Range (px) | Notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Town Hall | — | 2000 | — | — | — | — | — | Gives 5 gold/s; losing it loses the match |
+| Barracks | — | 1000 | — | — | — | — | — | Trains Soldiers; queue of 5 |
+| Soldier | 50 | 100 | 5 | 90 | 10 | 1.0 | 30 | Sight range 250 px |
+
+**Economy:** starting gold 150, income 5 gold per second, unit cap 30 Soldiers per player, no upkeep.
+
+**Map:** 2400 × 1000 px, flat and open, mirrored left to right. Each base sits 200 px from its edge, so armies cross about 2000 px (roughly 22 seconds at Soldier speed).
+
+**Win condition:** the enemy Town Hall reaches 0 HP, or the opponent disconnects for 30 seconds.
+
+These numbers are starting points for playtesting, not balanced values. They live in `data/` and are tuned there.
+
+## Project structure *(Core)*
+
+The folder layout enforces the architecture: `sim/` may never import from `client/`, and only `data/` changes when a new game swaps its content.
+
+```
+rts-template/
+  docs/GDD.md              this document
+  project.godot
+  .godot-version           pinned engine version
+  sim/                     pure simulation, no rendering or input
+    world_state.gd
+    systems/               income, production, targeting, movement, combat, deaths, win_check
+    commands/              one script per command: schema, validate, apply
+  data/                    game layer: unit and building definitions, map, economy constants
+  net/                     NetProtocol, message encoding, room manager (server side)
+  server/                  headless entry point, room loop
+  client/                  rendering, input, HUD, interpolation, lobby and wake screens
+  tests/                   headless simulation tests
+  deploy/
+    Dockerfile             server container
+    export_presets.cfg     web and Linux server exports
+  .github/workflows/       build, test and export on every push
+```
+
+Rules: `sim/` and `data/` are shared by both exports; `server/` is excluded from the web export and `client/` from the server export. Code style follows the Godot GDScript style guide with static typing everywhere.
+
+## Deployment *(Core; hosts are Game layer choices)*
+
+The web client is static files on marz.gg; the game server is a Docker container on Render's free tier, reached at a `wss://` address set in one config value.
+
+| Piece | PoC host | Notes |
+| --- | --- | --- |
+| Web client | marz.gg (SiteGround), under `public_html/games/<game-name>/` | Static Godot web export; shared hosting cannot run the server |
+| Game server | Render free web service, built from `deploy/Dockerfile` | Sleeps after 15 minutes idle; the wake screen covers the cold start |
+| Fallback server | Own PC plus a free tunnel, or a ~$5/month VPS | Same container; only the server URL changes |
+
+Rules:
+
+- The server URL MUST be a single config value, never hard-coded in game scripts.
+- Every build shows a build number (commit short hash) on the title screen, and the server reports its build number on connect. A client and server on different builds show a "please refresh" message instead of connecting.
+- Use Godot's single-threaded web export unless a feature truly needs threads, since threaded exports require extra server headers that shared hosting may not provide.
+
+## Testing *(Core)*
+
+Game rules are proven by headless tests that feed commands into the simulation and check the outcome, so AI-written changes are verified without manual play.
+
+- **Simulation tests (MUST, run on every push):** build a world, apply a scripted list of commands, run N ticks, assert on state. Examples: a `train` with too little gold is rejected; 10 Soldiers beat 5; a Town Hall at 0 HP ends the match; commands for another player's units are ignored.
+- **Two-client local test (each networking PR):** run the server and two clients on one machine, play a match, and confirm both screens agree.
+- **Latency test (before calling the PoC done):** play with 150 ms of added latency and confirm controls still feel responsive.
+- **Online playtest (milestone gate):** two people on different networks complete a match against the deployed server.
+
+Tests use the GUT framework (Godot Unit Test) or an equivalent runner that works headless in CI.
+
+## Milestones *(Core)*
+
+Five milestones, each ending in something you can play or see, tracked on GitHub as one milestone with issues per task.
+
+```mermaid
+flowchart TD
+    M1["M1 · Foundation<br/>Repo, GDD, Godot project with the sim/client split, CI, web export live on marz.gg with a build number"]
+    M2["M2 · Local sandbox<br/>Full ruleset offline, both players driven from one screen through commands, simulation tests in CI"]
+    M3["M3 · Networking<br/>Headless server, WebSocket rooms with codes, snapshots and interpolation, two clients on one machine"]
+    M4["M4 · Online<br/>Server container deployed to Render, wake screen, client and server build-number check"]
+    M5["M5 · Hardening<br/>Ping display, disconnect forfeit, rematch button, 150 ms latency test"]
+    Done(["Template ready to copy for the next RTS"])
+    M1 -- "Gate: empty web build loads on marz.gg with the right build number" --> M2
+    M2 -- "Gate: a full match plays to a victory screen locally" --> M3
+    M3 -- "Gate: both screens agree through a full match" --> M4
+    M4 -- "Gate: two people on different networks finish a match" --> M5
+    M5 -- "Gate: every Definition of done item is checked" --> Done
+```
+
+M2 is the one to protect: once the game works locally through commands, adding the network in M3 is a contained change instead of a rewrite.
+
+## Extension points *(Core)*
+
+Future games grow the template through these planned seams, none of which change the architecture invariants.
+
+| Feature | Where it plugs in | Notes |
+| --- | --- | --- |
+| New unit or building | A definition in `data/` | No code unless it needs a new ability |
+| New ability (heal, ranged, build) | A new component plus a system in the tick order | Document its place in the tick order |
+| Workers and harvesting | `gather` command, resource nodes, carry component | Needs pathfinding first |
+| Building placement | `build` command with server-side footprint validation | Client shows a ghost preview |
+| Pathfinding | Inside the movement system (Godot navigation or a grid A*) | Commands unchanged |
+| Fog of war | Server filters each player's snapshot to what they can see | Only possible because the server is authoritative |
+| AI opponent | A server-side bot that emits commands into a room | Same validation as a human |
+| Replays | Record match seed plus the command log; replay through the simulation | Requires the seeded-randomness rule |
+| Larger battles | Delta-compressed snapshots, lower snapshot rate | Inside `net/` only |
+| Reconnection | Rejoin token; server sends a full snapshot on rejoin | Fits the existing 30-second window |
+| More than two players | Room slot count and team assignment | Win check becomes "last team standing" |
+| Deterministic lockstep | Swap state sync for command broadcast | Only if unit counts reach thousands; requires fixed-point math |
+
+## Decision log and open questions
+
+Record every change to a Core rule here, newest first, with the reason.
+
+| Date | Decision | Reason |
+| --- | --- | --- |
+| 2026-10-25 | Godot 4.7.2 pinned | Latest stable release at project start (released 2026-08-18) |
+| 2026-10-25 | Repo `MarcialPimentel/rts-template`; this file is the canonical GDD | One source of truth that AI sessions can be pointed at |
+| 2026-10-25 | Barracks pre-placed in the PoC | Building placement is its own UX problem; listed as an extension point |
+| 2026-10-25 | Server hosted on Render free tier, packaged as Docker | Free for under 5 playtesters; Docker keeps a later move to a ~$5 VPS a config change |
+| 2026-10-25 | Server-authoritative state sync over deterministic lockstep | Godot does not guarantee float determinism; desync bugs are hard to debug in AI-written code |
+| 2026-10-25 | WebSockets over WebRTC | Browsers cannot use UDP; WebRTC needs a signaling server and has NAT issues |
+| 2026-10-25 | No workers in the PoC; passive income | Harvesting adds pathing and AI work without testing networking |
+
+**Open questions:**
+
+- [ ] Render's free-tier limits are current as of October 2026 and change often; recheck before deploying (M4).
