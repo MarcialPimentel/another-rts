@@ -3,7 +3,7 @@
  * Durations are in seconds and speeds/rates per second; `compileDefs` converts them to ticks.
  */
 export interface EntityDefData {
-  /** Stable id used in commands and snapshots, e.g. "soldier". */
+  /** Stable id used in commands and snapshots, e.g. "line". */
   id: string;
   name: string;
   kind: "unit" | "building";
@@ -16,8 +16,17 @@ export interface EntityDefData {
   buildTime?: number;
   /** Movement speed in px/s. Present only on things that move. */
   speed?: number;
-  /** Attack: damage per hit, seconds between hits, range in px from edge to edge. */
-  attack?: { damage: number; interval: number; range: number };
+  /** How the client draws it. Presentation only; the simulation ignores it. Default "circle". */
+  shape?: Shape;
+  /** Armour tags that attack bonuses refer to, e.g. "light", "heavy", "structure". */
+  tags?: string[];
+  /** Flat damage reduction per hit received. A hit always deals at least 1 damage. */
+  armor?: number;
+  /**
+   * Attack: damage per hit, seconds between hits, range in px from edge to edge, and optional
+   * damage multipliers against targets with a tag (e.g. `{ heavy: 2 }`). Armour applies after bonuses.
+   */
+  attack?: { damage: number; interval: number; range: number; bonus?: Record<string, number> };
   /** Distance in px (edge to edge) at which idle units notice enemies. */
   sight?: number;
   /** Gold per second this entity gives its owner. */
@@ -29,6 +38,8 @@ export interface EntityDefData {
   isHeadquarters?: boolean;
 }
 
+export type Shape = "circle" | "square" | "triangle" | "hexagon";
+
 /** A definition after unit conversion, used by the simulation. */
 export interface EntityDef {
   id: string;
@@ -38,9 +49,12 @@ export interface EntityDef {
   hp: number;
   cost: number;
   buildTicks: number;
+  shape: Shape;
+  tags: string[];
+  armor: number;
   /** px per tick; 0 when the entity can't move. */
   speedPerTick: number;
-  attack: { damage: number; intervalTicks: number; range: number } | null;
+  attack: { damage: number; intervalTicks: number; range: number; bonus: Record<string, number> } | null;
   sight: number;
   incomePerTick: number;
   produces: string[];

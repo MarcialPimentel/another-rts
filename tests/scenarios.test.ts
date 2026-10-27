@@ -12,13 +12,13 @@ const run = (w: World, ticks: number) => {
   for (let i = 0; i < ticks; i++) step(w);
 };
 const soldiersOf = (w: World, p: number) =>
-  entityList(w).filter((e) => e.owner === p && e.type === "soldier");
+  entityList(w).filter((e) => e.owner === p && e.type === "line");
 
 describe("GDD scenarios", () => {
   it("10 Soldiers beat 5", () => {
     const w = createWorld();
-    for (let i = 0; i < 10; i++) spawnEntity(w, 0, "soldier", 1000, 400 + i * 22);
-    for (let i = 0; i < 5; i++) spawnEntity(w, 1, "soldier", 1150, 450 + i * 22);
+    for (let i = 0; i < 10; i++) spawnEntity(w, 0, "line", 1000, 400 + i * 22);
+    for (let i = 0; i < 5; i++) spawnEntity(w, 1, "line", 1150, 450 + i * 22);
     run(w, 60 * TICKS_PER_SECOND);
     expect(soldiersOf(w, 1)).toHaveLength(0);
     expect(soldiersOf(w, 0).length).toBeGreaterThan(0);
@@ -28,12 +28,12 @@ describe("GDD scenarios", () => {
     const w = createWorld();
     w.players[0]!.gold = 10;
     const b = entityList(w).find((e) => e.owner === 0 && e.type === "barracks")!;
-    expect(applyCommand(w, 0, { type: "train", building: b.id, unit: "soldier" })).toBe(false);
+    expect(applyCommand(w, 0, { type: "train", building: b.id, unit: "line" })).toBe(false);
   });
 
   it("commands for another player's units are ignored", () => {
     const w = createWorld();
-    const theirs = spawnEntity(w, 1, "soldier", 1500, 500);
+    const theirs = spawnEntity(w, 1, "line", 1500, 500);
     step(w, [{ player: 0, command: { type: "move", units: [theirs.id], x: 100, y: 100 } }]);
     expect(theirs.order.kind).toBe("idle");
   });
@@ -46,7 +46,7 @@ describe("GDD scenarios", () => {
       const commands: PlayerCommand[] = [];
       // Player 0 keeps training and sends everyone at the enemy base every 20 seconds.
       if (w.tick % TICKS_PER_SECOND === 0) {
-        commands.push({ player: 0, command: { type: "train", building: barracks.id, unit: "soldier" } });
+        commands.push({ player: 0, command: { type: "train", building: barracks.id, unit: "line" } });
       }
       if (w.tick % (20 * TICKS_PER_SECOND) === 0) {
         const army = soldiersOf(w, 0).map((s) => s.id);
@@ -63,7 +63,7 @@ describe("GDD scenarios", () => {
 
   it("a Town Hall at 0 HP ends the match", () => {
     const w = createWorld();
-    entityList(w).find((e) => e.owner === 0 && e.type === "town_hall")!.hp = 0;
+    entityList(w).find((e) => e.owner === 0 && e.type === "hq")!.hp = 0;
     step(w);
     expect(w.status).toBe("ended");
     expect(w.winner).toBe(1);

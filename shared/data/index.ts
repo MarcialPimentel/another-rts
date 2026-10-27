@@ -1,8 +1,8 @@
 import { perSecondToPerTick, secondsToTicks } from "../sim/constants";
-import { POC_GAME } from "./poc";
+import { GAME_DATA } from "./game";
 import type { EntityDef, EntityDefData, GameData } from "./types";
 
-export type { EntityDef, EntityDefData, GameData, MapData, EconomyData } from "./types";
+export type { EntityDef, EntityDefData, GameData, MapData, EconomyData, Shape } from "./types";
 
 /** Converts designer-facing definitions (seconds, per-second rates) into tick-based ones. */
 export function compileDef(d: EntityDefData): EntityDef {
@@ -12,6 +12,9 @@ export function compileDef(d: EntityDefData): EntityDef {
     kind: d.kind,
     radius: d.radius,
     hp: d.hp,
+    shape: d.shape ?? "circle",
+    tags: d.tags ?? [],
+    armor: d.armor ?? 0,
     cost: d.cost ?? 0,
     buildTicks: d.buildTime !== undefined ? secondsToTicks(d.buildTime) : 0,
     speedPerTick: d.speed !== undefined ? perSecondToPerTick(d.speed) : 0,
@@ -20,6 +23,7 @@ export function compileDef(d: EntityDefData): EntityDef {
           damage: d.attack.damage,
           intervalTicks: secondsToTicks(d.attack.interval),
           range: d.attack.range,
+          bonus: d.attack.bonus ?? {},
         }
       : null,
     sight: d.sight ?? 0,
@@ -58,5 +62,5 @@ export function compileGame(data: GameData): CompiledGame {
   };
 }
 
-/** The game this build plays. A new game swaps POC_GAME for its own data. */
-export const GAME: CompiledGame = compileGame(POC_GAME);
+/** The game this build plays. */
+export const GAME: CompiledGame = compileGame(GAME_DATA);

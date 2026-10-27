@@ -9,6 +9,10 @@ export interface ViewEntity {
   x: number;
   y: number;
   hp: number;
+  /** Entity this one is fighting, or null. */
+  target: number | null;
+  /** Tick of its most recent hit, or -1 (for drawing shots). */
+  lastAttackTick: number;
   /** Production queue (producers only; empty otherwise). */
   queue: string[];
   /** Progress of the first queued item, 0..1. */
@@ -46,6 +50,8 @@ export function worldToView(world: World, game: CompiledGame = GAME): ViewState 
         x: e.x,
         y: e.y,
         hp: e.hp,
+        target: e.target,
+        lastAttackTick: e.lastAttackTick,
         queue: [...e.queue],
         progress: total > 0 ? Math.min(1, e.progress / total) : 0,
         rally: e.rally ? { ...e.rally } : null,

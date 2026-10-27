@@ -6,13 +6,13 @@ import { createWorld, entityList, spawnEntity } from "../shared/sim/world";
 describe("world state", () => {
   it("starts each player with their base and starting gold", () => {
     const world = createWorld();
-    expect(world.players.map((p) => p.gold)).toEqual([150, 150]);
+    expect(world.players.map((p) => p.gold)).toEqual([200, 200]);
     for (const p of [0, 1]) {
       const types = entityList(world)
         .filter((e) => e.owner === p)
         .map((e) => e.type)
         .sort();
-      expect(types).toEqual(["barracks", "town_hall"]);
+      expect(types).toEqual(["barracks", "hq"]);
     }
     const barracks = entityList(world).find((e) => e.type === "barracks" && e.owner === 0)!;
     expect(barracks.rally).toEqual(GAME.map.bases[0]!.rally);
@@ -20,9 +20,9 @@ describe("world state", () => {
 
   it("assigns increasing ids and never reuses them", () => {
     const world = createWorld();
-    const a = spawnEntity(world, 0, "soldier", 10, 10);
+    const a = spawnEntity(world, 0, "line", 10, 10);
     delete world.entities[a.id];
-    const b = spawnEntity(world, 0, "soldier", 10, 10);
+    const b = spawnEntity(world, 0, "line", 10, 10);
     expect(b.id).toBeGreaterThan(a.id);
   });
 

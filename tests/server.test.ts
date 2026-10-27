@@ -78,10 +78,10 @@ describe("game server", () => {
     const view = decodeSnapshot(first.s, GAME.typeIds);
     const barracks = view.entities.find((e) => e.owner === 0 && e.type === "barracks")!;
 
-    a.send({ t: "command", seq: 1, cmd: { type: "train", building: barracks.id, unit: "soldier" } });
+    a.send({ t: "command", seq: 1, cmd: { type: "train", building: barracks.id, unit: "line" } });
     const acked = await a.waitFor("snapshot", (m) => m.s.a === 1);
     const ackedView = decodeSnapshot(acked.s, GAME.typeIds);
-    expect(ackedView.entities.find((e) => e.id === barracks.id)!.queue).toEqual(["soldier"]);
+    expect(ackedView.entities.find((e) => e.id === barracks.id)!.queue).toEqual(["line"]);
     expect(ackedView.players[0]!.gold).toBeLessThan(150);
 
     const sameTick = await b.waitFor("snapshot", (m) => m.s.k === acked.s.k);
@@ -93,7 +93,7 @@ describe("game server", () => {
     const first = await a.waitFor("snapshot");
     const view = decodeSnapshot(first.s, GAME.typeIds);
     const theirs = view.entities.find((e) => e.owner === 0 && e.type === "barracks")!;
-    b.send({ t: "command", seq: 1, cmd: { type: "train", building: theirs.id, unit: "soldier" } });
+    b.send({ t: "command", seq: 1, cmd: { type: "train", building: theirs.id, unit: "line" } });
     const later = await b.waitFor("snapshot", (m) => m.s.k > first.s.k + 4);
     const after = decodeSnapshot(later.s, GAME.typeIds);
     expect(after.entities.find((e) => e.id === theirs.id)!.queue).toEqual([]);

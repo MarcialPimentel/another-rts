@@ -10,8 +10,8 @@ describe("snapshot encoding", () => {
   it("round-trips the world into the same view (rounded)", () => {
     const w = createWorld();
     const b = entityList(w).find((e) => e.type === "barracks" && e.owner === 0)!;
-    applyCommand(w, 0, { type: "train", building: b.id, unit: "soldier" });
-    spawnEntity(w, 1, "soldier", 1000.4, 500.6);
+    applyCommand(w, 0, { type: "train", building: b.id, unit: "line" });
+    spawnEntity(w, 1, "line", 1000.4, 500.6);
     for (let i = 0; i < 30; i++) step(w);
 
     const decoded = decodeSnapshot(JSON.parse(JSON.stringify(encodeSnapshot(w, GAME, 7))), GAME.typeIds);
@@ -30,6 +30,24 @@ describe("snapshot encoding", () => {
     expect(barracks.rally).toEqual(b.rally);
   });
 
+  it("carries each attacker's target and when it last hit, so clients can draw shots", () => {
+    const w = createWorld();
+    const a = spawnEntity(w, 0, "ranged", 1000, 500);
+    const b = spawnEntity(w, 1, "line", 1100, 500);
+    applyCommand(w, 1, { type: "stop", units: [b.id] });
+    applyCommand(w, 0, { type: "attack", units: [a.id], target: b.id });
+    for (let i = 0; i < 5; i++) step(w);
+    expect(a.lastAttackTick).toBeGreaterThanOrEqual(0);
+    const v = decodeSnapshot(JSON.parse(JSON.stringify(encodeSnapshot(w, GAME))), GAME.typeIds);
+    const shooter = v.entities.find((e) => e.id === a.id)!;
+    expect(shooter.target).toBe(b.id);
+    expect(shooter.lastAttackTick).toBe(a.lastAttackTick);
+    // Buildings that can't attack, and units that never hit, report no shot.
+    const hq = v.entities.find((e) => e.type === "hq")!;
+    expect(hq.target).toBeNull();
+    expect(hq.lastAttackTick).toBe(-1);
+  });
+
   it("carries the recipient's ack and the match result", () => {
     const w = createWorld();
     w.status = "ended";
@@ -45,8 +63,8 @@ describe("snapshot encoding", () => {
 
   it("stays small: a 60-unit battle is under 3 KB per snapshot", () => {
     const w = createWorld();
-    for (let i = 0; i < 30; i++) spawnEntity(w, 0, "soldier", 900 + (i % 6) * 22, 300 + i * 12);
-    for (let i = 0; i < 30; i++) spawnEntity(w, 1, "soldier", 1300 + (i % 6) * 22, 300 + i * 12);
+    for (let i = 0; i < 30; i++) spawnEntity(w, 0, "line", 900 + (i % 6) * 22, 300 + i * 12);
+    for (let i = 0; i < 30; i++) spawnEntity(w, 1, "line", 1300 + (i % 6) * 22, 300 + i * 12);
     expect(JSON.stringify({ t: "snapshot", s: encodeSnapshot(w, GAME) }).length).toBeLessThan(3000);
   });
 });

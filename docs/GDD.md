@@ -202,8 +202,8 @@ Both players share one roster, trained at the Barracks. Counters come from two d
 | --- | --- | --- | --- | --- |
 | ■ Square | Line | Armoured melee front line | Raiders (armour shrugs off their small hits) | Ranged (bonus vs heavy) |
 | ▲ Triangle | Raider | Fast, fragile skirmisher; captures points faster (G2) | Ranged, Siege (closes the gap fast) | Line |
-| ● Circle | Ranged | Damage from behind the line | Line | Raiders |
-| ⬢ Hexagon | Siege | Very long range, slow, big hits | Buildings (bonus vs structure), slow groups | Raiders |
+| ● Circle | Ranged | Damage from behind the line | Line, Siege (bonus vs heavy) | Raiders |
+| ⬢ Hexagon | Siege | Very long range, slow, big hits; an escort is required | Buildings (bonus vs structure) | Every unit in an open fight, Raiders most of all |
 
 Stats live in `shared/data/game.ts` and are tuned there; the table in that file is the current truth. Starting values:
 
@@ -213,10 +213,10 @@ Stats live in `shared/data/game.ts` and are tuned there; the table in that file 
 | Barracks | structure | — | 1000 | 3 | — | — | — | Trains all four units; queue of 5 |
 | Line | heavy | 60 | 160 | 2 | 6 | 70 | 10 / 1.0 / 20 | — |
 | Raider | light | 50 | 75 | 0 | 4 | 140 | 7 / 0.6 / 15 | — |
-| Ranged | light | 70 | 70 | 0 | 6 | 80 | 10 / 1.0 / 140 | ×2 vs heavy |
+| Ranged | light | 70 | 70 | 0 | 6 | 80 | 10 / 1.0 / 140 | ×3 vs heavy |
 | Siege | heavy | 120 | 120 | 1 | 9 | 50 | 36 / 3.0 / 260 | ×3 vs structure |
 
-The counter loop is checked by equal-gold battle tests in `tests/balance.test.ts`; a stat change that breaks the loop fails CI.
+The counter loop is checked by equal-gold battle tests in `tests/balance.test.ts` at 300, 600 and 1200 gold per side: Line beats Raider, Raider beats Ranged and Siege, Ranged beats Line and Siege, and Siege kills an HQ at least 1.5× faster than anything else for the same gold. A stat change that breaks the loop fails CI.
 
 **Combat feedback (G1):** each unit draws as its shape in its owner's colour. Attacks show as a slash for melee and a tracer for ranged and siege, hit units flash, and dying units burst. Snapshots carry each attacker's target and how long ago it last fired so both players see the same shots.
 
