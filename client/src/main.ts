@@ -19,7 +19,7 @@ function showMenu(): void {
   menu.className = "menu";
   menu.innerHTML = `
     <h1>Another RTS</h1>
-    <p class="tagline">Two players. One Town Hall each. Destroy theirs.</p>
+    <p class="tagline">Two players. Four shapes. Destroy their HQ.</p>
     <div class="buttons">
       <button class="primary" data-action="online">Play online</button>
       <button data-action="sandbox">Sandbox (both players, offline)</button>

@@ -128,13 +128,13 @@ describe("RoomManager", () => {
     const room = startedRoom(m, a, b);
     let now = advance(m, 0, 3000);
     const barracks = Object.values(room.world!.entities).find((e) => e.type === "barracks" && e.owner === 0)!;
-    room.queueCommand(a, 5, { type: "train", building: barracks.id, unit: "soldier" });
+    room.queueCommand(a, 5, { type: "train", building: barracks.id, unit: "line" });
     // A command for the other player's barracks is dropped by validation.
-    room.queueCommand(b, 9, { type: "train", building: barracks.id, unit: "soldier" });
+    room.queueCommand(b, 9, { type: "train", building: barracks.id, unit: "line" });
     now = advance(m, now, 50);
-    expect(barracks.queue).toEqual(["soldier"]);
+    expect(barracks.queue).toEqual(["line"]);
     expect(a.last("snapshot")!.s.a).toBe(5);
-    expect(a.last("snapshot")!.s.g[0]).toBe(100);
+    expect(a.last("snapshot")!.s.g[0]).toBe(140);
     expect(b.last("snapshot")!.s.k).toBe(a.last("snapshot")!.s.k);
   });
 
@@ -159,7 +159,7 @@ describe("RoomManager", () => {
     const b = new FakeConn();
     const room = startedRoom(m, a, b);
     let now = advance(m, 0, 3000);
-    const hall = Object.values(room.world!.entities).find((e) => e.type === "town_hall" && e.owner === 1)!;
+    const hall = Object.values(room.world!.entities).find((e) => e.type === "hq" && e.owner === 1)!;
     hall.hp = 0;
     now = advance(m, now, 50);
     expect(a.last("match_end")).toMatchObject({ winner: 0 });

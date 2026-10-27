@@ -161,8 +161,8 @@ export class GameScreen {
           : "You left the match."
         : view.endReason === "headquarters_destroyed"
           ? won
-            ? "You destroyed the enemy Town Hall."
-            : "Your Town Hall was destroyed."
+            ? "You destroyed the enemy HQ."
+            : "Your HQ was destroyed."
           : "";
     this.endOverlay.innerHTML = `<div class="card"><h2 class="${won ? "win" : "lose"}">${title}</h2><p>${reason}</p><div class="actions"></div><p class="note"></p></div>`;
     const actions = this.endOverlay.querySelector(".actions")!;

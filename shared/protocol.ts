@@ -51,12 +51,19 @@ export type ServerMessage =
   | { t: "room_closed" };
 
 /**
- * One entity in a snapshot: [id, typeIndex, owner, x, y, hp] and, for producers,
- * [queue (type indexes), progress 0-100, rallyX, rallyY]. Numbers are rounded to keep messages small.
+ * One entity in a snapshot: [id, typeIndex, owner, x, y, hp, attack, producer?].
+ * `attack` is 0 for entities that can't attack, else [targetId or 0, ticks since last hit (capped)].
+ * `producer` is present only on producers: [queue (type indexes), progress 0-100, rallyX, rallyY].
+ * Numbers are rounded to keep messages small.
  */
+export type EncodedAttack = 0 | [number, number];
+export type EncodedProducer = [number[], number, number, number];
 export type EncodedEntity =
-  | [number, number, number, number, number, number]
-  | [number, number, number, number, number, number, number[], number, number, number];
+  | [number, number, number, number, number, number, EncodedAttack]
+  | [number, number, number, number, number, number, EncodedAttack, EncodedProducer];
+
+/** Attack ages at or above this are sent as "long ago" (no shot to draw). */
+export const ATTACK_AGE_CAP = 99;
 
 export interface EncodedSnapshot {
   /** Tick number. */
@@ -79,23 +86,33 @@ export function encodeSnapshot(world: World, game: CompiledGame, ack = 0): Encod
   const typeIndex = new Map(game.typeIds.map((id, i) => [id, i]));
   const e: EncodedEntity[] = [];
   for (const ent of Object.values(world.entities)) {
-    const base: [number, number, number, number, number, number] = [
+    const def = game.defs[ent.type]!;
+    const attack: EncodedAttack = def.attack
+      ? [
+          ent.target ?? 0,
+          ent.lastAttackTick < 0 ? ATTACK_AGE_CAP : Math.min(ATTACK_AGE_CAP, world.tick - ent.lastAttackTick),
+        ]
+      : 0;
+    const base: [number, number, number, number, number, number, EncodedAttack] = [
       ent.id,
       typeIndex.get(ent.type)!,
       ent.owner,
       Math.round(ent.x),
       Math.round(ent.y),
       Math.ceil(ent.hp),
+      attack,
     ];
-    if (game.defs[ent.type]!.produces.length > 0) {
+    if (def.produces.length > 0) {
       const next = ent.queue[0];
       const total = next ? game.defs[next]!.buildTicks : 0;
       e.push([
         ...base,
-        ent.queue.map((q) => typeIndex.get(q)!),
-        total > 0 ? Math.min(100, Math.floor((ent.progress / total) * 100)) : 0,
-        Math.round(ent.rally?.x ?? ent.x),
-        Math.round(ent.rally?.y ?? ent.y),
+        [
+          ent.queue.map((q) => typeIndex.get(q)!),
+          total > 0 ? Math.min(100, Math.floor((ent.progress / total) * 100)) : 0,
+          Math.round(ent.rally?.x ?? ent.x),
+          Math.round(ent.rally?.y ?? ent.y),
+        ],
       ]);
     } else {
       e.push(base);
@@ -119,8 +136,9 @@ export function decodeSnapshot(s: EncodedSnapshot, typeIds: string[]): ViewState
     tick: s.k,
     players: s.g.map((gold, id) => ({ id, gold, defeated: s.d[id] === 1 })),
     entities: s.e.map((raw): ViewEntity => {
-      const [id, t, owner, x, y, hp] = raw;
-      const producer = raw.length === 10;
+      const [id, t, owner, x, y, hp, attack] = raw;
+      const prod = raw.length === 8 ? raw[7] : null;
+      const age = attack === 0 ? ATTACK_AGE_CAP : attack[1];
       return {
         id,
         type: typeIds[t] ?? "unknown",
@@ -128,9 +146,11 @@ export function decodeSnapshot(s: EncodedSnapshot, typeIds: string[]): ViewState
         x,
         y,
         hp,
-        queue: producer ? raw[6].map((q) => typeIds[q] ?? "unknown") : [],
-        progress: producer ? raw[7] / 100 : 0,
-        rally: producer ? { x: raw[8], y: raw[9] } : null,
+        target: attack === 0 || attack[0] === 0 ? null : attack[0],
+        lastAttackTick: age >= ATTACK_AGE_CAP ? -1 : s.k - age,
+        queue: prod ? prod[0].map((q) => typeIds[q] ?? "unknown") : [],
+        progress: prod ? prod[1] / 100 : 0,
+        rally: prod ? { x: prod[2], y: prod[3] } : null,
       };
     }),
     status: s.st === 1 ? "ended" : "playing",

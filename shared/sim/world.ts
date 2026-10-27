@@ -29,6 +29,8 @@ export interface Entity {
   target: number | null;
   /** Ticks until this entity can attack again. */
   cooldown: number;
+  /** Tick of this entity's most recent hit, or -1. Lets clients draw shots. */
+  lastAttackTick: number;
   /** Production queue of unit type ids (producers). */
   queue: string[];
   /** Ticks spent on the first item in the queue. */
@@ -77,6 +79,7 @@ export function spawnEntity(
     order: { kind: "idle" },
     target: null,
     cooldown: 0,
+    lastAttackTick: -1,
     queue: [],
     progress: 0,
     rally: null,
