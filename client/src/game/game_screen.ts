@@ -1,6 +1,7 @@
 import { GAME } from "../../../shared/data";
 import type { ViewState } from "../../../shared/view";
 import { Camera } from "./camera";
+import { Effects } from "./effects";
 import { Feedback } from "./feedback";
 import { Hud } from "./hud";
 import { Input, type FeedbackKind } from "./input";
@@ -27,6 +28,7 @@ export class GameScreen {
   private readonly ctx: CanvasRenderingContext2D;
   private readonly camera = new Camera(GAME);
   private readonly feedback = new Feedback();
+  private readonly effects = new Effects();
   private readonly input: Input;
   private readonly hud: Hud;
   private readonly endOverlay: HTMLDivElement;
@@ -67,6 +69,7 @@ export class GameScreen {
       toScreen: (x: number, y: number) => this.camera.toScreen(x, y),
       view: () => this.session.view(performance.now()),
       localPlayer: () => this.session.localPlayer,
+      effects: () => this.effects.stats(),
     };
     this.frame = requestAnimationFrame(this.loop);
   }
@@ -118,12 +121,16 @@ export class GameScreen {
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
     ctx.restore();
+    this.effects.observe(view, GAME, now);
     renderWorld(ctx, view, this.camera, GAME, {
       localPlayer: this.session.localPlayer,
       colors: this.session.colors,
       selection: this.input.selection,
       dragBox: this.input.dragBox,
+      effects: this.effects,
+      now,
     });
+    this.effects.draw(ctx, this.camera, this.session.colors, now);
     this.feedback.draw(ctx, this.camera, now);
     this.canvas.style.cursor = this.input.attackMoveArmed ? "crosshair" : "default";
     this.hud.update(view);

@@ -166,7 +166,7 @@ The client must feel instant even though nothing happens until the server confir
 
 - Left-click selects a unit or building; drag selects a box of own units; Shift adds to selection.
 - Right-click on ground: `move`. Right-click on an enemy: `attack`. `A` then left-click: `attack_move`. `S`: `stop`.
-- With a Barracks selected: a Train button (and hotkey `Q`) sends `train`; right-click on ground sends `set_rally`.
+- With a Barracks selected: one Train button per unit it can make (hotkeys `Q`, `W`, `E`, `R` in the order the data lists them) sends `train`; right-click on ground sends `set_rally`.
 - Camera pans with edge scrolling and arrow keys; the PoC map fits about two screens wide.
 
 **Instant feedback (MUST).** On any command, immediately show a marker at the click point (green for move, red for attack) and play a short click sound, before the server responds. Training shows the queued unit at once, greyed out until the snapshot confirms it.
@@ -192,9 +192,9 @@ Two commanders fight over a small map with shape-based armies. Every coin goes t
 3. **Systematic and modular.** Each mechanic is one system (or one data field) with its own tests and its own place in the tick order, added one milestone at a time. New units should be data, not code.
 4. **Short matches.** Target 6–9 minutes, hard ceiling 10. Prefer mechanics that force a result (map control, victory points) over ones that reward turtling.
 
-**Status:** the template's PoC ruleset is being replaced milestone by milestone (see Game milestones). Sections below mark what is **built** and what is **planned**.
+**Status (2026-10-27):** G1 is built and ready to playtest. Sections below mark what is **built** and what is **planned**.
 
-### Army: four shapes and a counter loop *(G1)*
+### Army: four shapes and a counter loop *(built in G1)*
 
 Both players share one roster, trained at the Barracks. Counters come from two data fields, not special code: **armour** (flat reduction per hit, minimum 1 damage) and **bonus damage against tags** (`light`, `heavy`, `structure`). Fast, weak hits lose to armour; big hits ignore it.
 
@@ -218,7 +218,7 @@ Stats live in `shared/data/game.ts` and are tuned there; the table in that file 
 
 The counter loop is checked by equal-gold battle tests in `tests/balance.test.ts` at 300, 600 and 1200 gold per side: Line beats Raider, Raider beats Ranged and Siege, Ranged beats Line and Siege, and Siege kills an HQ at least 1.5× faster than anything else for the same gold. A stat change that breaks the loop fails CI.
 
-**Combat feedback (G1):** each unit draws as its shape in its owner's colour. Attacks show as a slash for melee and a tracer for ranged and siege, hit units flash, and dying units burst. Snapshots carry each attacker's target and how long ago it last fired so both players see the same shots.
+**Combat feedback (built in G1):** each unit draws as its shape in its owner's colour, a little larger than its collision circle so shapes read at a glance; Raider triangles point where they face. Attacks show as a slash for melee and a tracer for ranged and siege, hit units flash, and dying units burst. Snapshots carry each attacker's target and how long ago it last fired so both players see the same shots.
 
 ### Economy: capture points *(planned, G2)*
 
@@ -244,7 +244,7 @@ Until G3 lands, all four units are trainable from the start so the counters can 
 
 Until G4, the only win is destroying the enemy HQ (or a forfeit).
 
-### Map and economy (from G1)
+### Map and economy (current)
 
 **Map:** 2400 × 1000 px, flat and open, mirrored left to right. Each HQ sits 200 px from its edge. **Economy:** starting gold 200, HQ income 5 gold/s, unit cap 30 units per player (alive plus queued), no upkeep.
 

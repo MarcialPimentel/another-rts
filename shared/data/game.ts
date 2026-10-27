@@ -45,6 +45,7 @@ export const GAME_DATA: GameData = {
     {
       id: "line",
       name: "Line",
+      description: "Armoured melee front line. Beats Raiders; weak to Ranged.",
       kind: "unit",
       shape: "square",
       tags: ["heavy"],
@@ -60,6 +61,7 @@ export const GAME_DATA: GameData = {
     {
       id: "raider",
       name: "Raider",
+      description: "Fast, fragile skirmisher. Beats Ranged and Siege; weak to Line.",
       kind: "unit",
       shape: "triangle",
       tags: ["light"],
@@ -75,6 +77,7 @@ export const GAME_DATA: GameData = {
     {
       id: "ranged",
       name: "Ranged",
+      description: "Shoots from behind the line, triple damage to armoured units. Beats Line and Siege; weak to Raiders.",
       kind: "unit",
       shape: "circle",
       tags: ["light"],
@@ -90,6 +93,7 @@ export const GAME_DATA: GameData = {
     {
       id: "siege",
       name: "Siege",
+      description: "Very long range, triple damage to buildings. Loses open fights, so escort it.",
       kind: "unit",
       shape: "hexagon",
       tags: ["heavy"],
