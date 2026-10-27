@@ -4,7 +4,7 @@ Last updated 2026-10-27 · Owner: Marz
 
 > This file is the source of truth for Another RTS. If it disagrees with any other copy (chat drafts, docs elsewhere), this file wins.
 
-**Another RTS** is built from `MarcialPimentel/rts-template` v1.0 (the `upstream` remote). The Core sections below come from the template unchanged. The Game layer still holds the template's proof-of-concept ruleset until this game's design replaces it.
+**Another RTS** is built from `MarcialPimentel/rts-template` v1.0 (the `upstream` remote). The Core sections below come from the template unchanged. The Game layer section describes this game: a short, shape-based RTS about trading off economy, army and tech.
 
 ## How to use this template
 
@@ -181,23 +181,83 @@ The client must feel instant even though nothing happens until the server confir
 
 **Server wake screen (MUST).** If the server does not answer within 2 seconds, show "Waking up the server, this can take up to a minute" with a progress indicator, and keep retrying. Never show a silent hang or a raw connection error during a cold start.
 
-## Game layer: PoC ruleset *(Game layer — replace per game)*
+## Game layer: Another RTS *(Game layer)*
 
-Each player starts with a Town Hall, a Barracks and 150 gold; gold flows in passively, Soldiers are trained and sent to fight, and the first player to destroy the enemy Town Hall wins.
+Two commanders fight over a small map with shape-based armies. Every coin goes to **army** (win fights now), **economy** (earn more later) or **tech** (make every later unit better), and that three-way choice is the game. Matches last under 10 minutes.
 
-The ruleset is small on purpose but still a game: the economy decision is when to spend versus save for a bigger push, and the tactical decision is where and when to fight. Workers are left out because harvesting adds pathing and AI work without proving anything new about networking. The Barracks is pre-placed so the PoC skips building placement.
+**Design pillars:**
 
-| Entity | Cost (gold) | HP | Build time (s) | Speed (px/s) | Damage | Attack interval (s) | Range (px) | Notes |
+1. **Economy vs army vs tech.** One currency (gold) funds all three, so every purchase is a trade-off you can read. A second resource is only added if tech needs its own pressure.
+2. **Shapes first, flavour later.** Units are geometric shapes with clear silhouettes. The theme gets painted on once the systems play well; until then readability beats looks.
+3. **Systematic and modular.** Each mechanic is one system (or one data field) with its own tests and its own place in the tick order, added one milestone at a time. New units should be data, not code.
+4. **Short matches.** Target 6–9 minutes, hard ceiling 10. Prefer mechanics that force a result (map control, victory points) over ones that reward turtling.
+
+**Status:** the template's PoC ruleset is being replaced milestone by milestone (see Game milestones). Sections below mark what is **built** and what is **planned**.
+
+### Army: four shapes and a counter loop *(G1)*
+
+Both players share one roster, trained at the Barracks. Counters come from two data fields, not special code: **armour** (flat reduction per hit, minimum 1 damage) and **bonus damage against tags** (`light`, `heavy`, `structure`). Fast, weak hits lose to armour; big hits ignore it.
+
+| Shape | Unit | Role | Strong vs | Weak vs |
+| --- | --- | --- | --- | --- |
+| ■ Square | Line | Armoured melee front line | Raiders (armour shrugs off their small hits) | Ranged (bonus vs heavy) |
+| ▲ Triangle | Raider | Fast, fragile skirmisher; captures points faster (G2) | Ranged, Siege (closes the gap fast) | Line |
+| ● Circle | Ranged | Damage from behind the line | Line | Raiders |
+| ⬢ Hexagon | Siege | Very long range, slow, big hits | Buildings (bonus vs structure), slow groups | Raiders |
+
+Stats live in `shared/data/game.ts` and are tuned there; the table in that file is the current truth. Starting values:
+
+| Entity | Tags | Cost | HP | Armour | Build (s) | Speed (px/s) | Damage / interval (s) / range (px) | Bonus |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| Town Hall | — | 2000 | — | — | — | — | — | Gives 5 gold/s; losing it loses the match |
-| Barracks | — | 1000 | — | — | — | — | — | Trains Soldiers; queue of 5 |
-| Soldier | 50 | 100 | 5 | 90 | 10 | 1.0 | 30 | Sight range 250 px |
+| HQ | structure | — | 2000 | 3 | — | — | — | Gives 5 gold/s; losing it loses the match |
+| Barracks | structure | — | 1000 | 3 | — | — | — | Trains all four units; queue of 5 |
+| Line | heavy | 60 | 160 | 2 | 6 | 70 | 10 / 1.0 / 20 | — |
+| Raider | light | 50 | 75 | 0 | 4 | 140 | 7 / 0.6 / 15 | — |
+| Ranged | light | 70 | 70 | 0 | 6 | 80 | 10 / 1.0 / 140 | ×2 vs heavy |
+| Siege | heavy | 120 | 120 | 1 | 9 | 50 | 36 / 3.0 / 260 | ×3 vs structure |
 
-**Economy:** starting gold 150, income 5 gold per second, unit cap 30 Soldiers per player, no upkeep.
+The counter loop is checked by equal-gold battle tests in `tests/balance.test.ts`; a stat change that breaks the loop fails CI.
 
-**Map:** 2400 × 1000 px, flat and open, mirrored left to right. Each base sits 200 px from its edge, so armies cross about 2000 px (roughly 22 seconds at Soldier speed).
+**Combat feedback (G1):** each unit draws as its shape in its owner's colour. Attacks show as a slash for melee and a tracer for ranged and siege, hit units flash, and dying units burst. Snapshots carry each attacker's target and how long ago it last fired so both players see the same shots.
 
-**Win condition:** the enemy Town Hall reaches 0 HP, or the opponent disconnects for 30 seconds.
+### Economy: capture points *(planned, G2)*
+
+Each HQ gives a small trickle; most income comes from **capture points** held on the map. This makes map control the main fight and needs no pathfinding.
+
+- **Map:** 5 points. One safe point near each base, two contested side points, and a centre point worth more.
+- **Capturing:** units standing on a point with no enemy units nearby take it over about 8 seconds (faster with more units, capped; Raiders count double). An enemy-owned point must be made neutral first. Contested points pause.
+- **Income (starting values):** HQ 3 gold/s, side and safe points +2 gold/s, centre +3 gold/s.
+- **Economy investment (G3):** *Overclock*, researched at the HQ, adds income per owned point. Strong when you hold the map, wasted when you don't.
+
+### Tech: tiers and upgrades *(planned, G3)*
+
+- **Tier 2** is an upgrade at the HQ (~200 gold, ~30 s). Tier 1 trains Line and Raider; Tier 2 unlocks Ranged and Siege. Unit definitions get a `requires` field.
+- **Research** at the HQ: Weapons +1 (damage), Armour +1, and Overclock. Each is a `research` command, a research queue, and per-player upgrade levels that the combat and income systems read.
+- **No building placement yet.** Tech lives in the pre-placed buildings.
+
+Until G3 lands, all four units are trainable from the start so the counters can be playtested.
+
+### Win condition and pacing *(planned, G4)*
+
+- **Victory points:** each owned capture point earns victory points every second; the first player to the target wins. Destroying the enemy HQ also wins at once. Opponent disconnect for 30 seconds still forfeits.
+- **Target pacing:** 0:00–1:30 take your safe point and race Raiders to the side points; 1:30–4:00 choose between Tier 2, Overclock and more army; 4:00–8:00 fight over the centre and push with Siege.
+
+Until G4, the only win is destroying the enemy HQ (or a forfeit).
+
+### Map and economy (from G1)
+
+**Map:** 2400 × 1000 px, flat and open, mirrored left to right. Each HQ sits 200 px from its edge. **Economy:** starting gold 200, HQ income 5 gold/s, unit cap 30 units per player (alive plus queued), no upkeep.
+
+### Game milestones
+
+Each milestone ends in something to playtest, tracked on GitHub as a milestone with one issue per task.
+
+| Milestone | Scope | Playtest question |
+| --- | --- | --- |
+| G1 · Combat foundation | Armour and tag bonuses, the four units as data, shape rendering, attack and hit effects, train hotkeys Q/W/E/R | Do the counters feel right and read clearly? |
+| G2 · Capture points | Point entity, capture system, point income, 5-point map, point status in the HUD | Is the map worth fighting over? |
+| G3 · Tech | `research` command, tiers, `requires` on units, Weapons/Armour upgrades, Overclock | Is the army/economy/tech choice real? |
+| G4 · Win and pacing | Victory points, match timer, balance pass | Do matches end in 6–9 minutes? |
 
 These numbers are starting points for playtesting, not balanced values. They live in `shared/data/` and are tuned there.
 
@@ -307,6 +367,7 @@ Record every change to a Core rule here, newest first, with the reason.
 
 | Date | Decision | Reason |
 | --- | --- | --- |
+| 2026-10-27 | Game design: one currency split between economy, army and tech; capture-point income; four shared shape units with an armour/bonus-damage counter loop; tiers and research; victory points; matches under 10 minutes. Built in four milestones (G1–G4) | Design session with the owner. Shapes keep art cost at zero while the systems are proven; capture points avoid pathfinding; victory points stop turtling and keep matches short |
 | 2026-10-27 | Another RTS created from rts-template v1.0 with shared history (`upstream` remote). It takes over the marz.gg/games/rts page and the SiteGround secrets; its own Render services are `another-rts-server` and `another-rts-client`, and the template's live deploys are retired | The template isn't played on its own, so the game reuses its page and settings. Only one repo deploys to each place, so template pushes can't overwrite the game |
 | 2026-10-25 | Client also published to marz.gg/games/rts from GitHub Actions over SSH; asset paths are relative so one build works at a root or in a subfolder | Wanted the game on the owner's own domain; the server stays on Render because shared hosting can't run it |
 | 2026-10-25 | Ready-up lobby with colour choice; players keep their own colour on both screens (was: local player always blue, opponent red); rooms return to the lobby after a match instead of a separate rematch step | Playtest feedback: seeing your own colour swapped on the other screen was confusing, and a lobby before the match was wanted |
