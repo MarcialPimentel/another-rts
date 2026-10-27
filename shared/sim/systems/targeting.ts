@@ -1,6 +1,6 @@
 import { edgeDistance } from "../geometry";
 import type { System } from "../step";
-import type { Entity } from "../world";
+import { isAttackable, type Entity } from "../world";
 
 /** How far past sight range an engaged unit keeps chasing before giving up. */
 const LEASH = 1.5;
@@ -38,7 +38,7 @@ export const targeting: System = (world, game) => {
     let best: Entity | null = null;
     let bestScore = Infinity;
     for (const other of all) {
-      if (other.owner === e.owner) continue;
+      if (other.owner === e.owner || !isAttackable(other, game)) continue;
       const d = edgeDistance(e, other, game);
       if (d > def.sight) continue;
       // Threats first: anything that can't attack counts as farther away.

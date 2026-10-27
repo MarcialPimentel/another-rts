@@ -1,6 +1,7 @@
 import type { CompiledGame, Shape } from "../../../shared/data";
 import type { ViewEntity, ViewState } from "../../../shared/view";
 import type { Camera } from "./camera";
+import { TICKS_PER_SECOND } from "../../../shared/sim/constants";
 import { COLORS, teamColor } from "./colors";
 import type { Effects } from "./effects";
 
@@ -54,8 +55,10 @@ export function renderWorld(
   }
 }
 
+/** Points lie on the ground under everything, then buildings, then units on top. */
 function kindOrder(game: CompiledGame, e: ViewEntity): number {
-  return game.defs[e.type]?.kind === "building" ? 0 : 1;
+  const kind = game.defs[e.type]?.kind;
+  return kind === "point" ? -1 : kind === "building" ? 0 : 1;
 }
 
 function drawGround(ctx: CanvasRenderingContext2D, camera: Camera, game: CompiledGame): void {
@@ -119,6 +122,10 @@ function drawEntity(
 ): void {
   const def = game.defs[e.type];
   if (!def) return;
+  if (def.kind === "point") {
+    drawPoint(ctx, camera, def.radius, def.incomePerTick * TICKS_PER_SECOND, e, opts);
+    return;
+  }
   const p = camera.toScreen(e.x, e.y);
   // Units draw a little larger than their collision radius so shapes read at a glance.
   const r = def.radius * camera.scale * (def.kind === "unit" ? UNIT_DRAW_SCALE : 1);
@@ -184,6 +191,72 @@ function drawEntity(
     ctx.fillStyle = frac > 0.6 ? COLORS.hpGood : frac > 0.3 ? COLORS.hpMid : COLORS.hpLow;
     ctx.fillRect(p.x - w / 2, y, w * frac, 4);
   }
+}
+
+/**
+ * A capture point: a tinted circle on the ground in its owner's colour (grey when neutral), a
+ * diamond marker with its income, and a ring that fills in the capturing player's colour.
+ */
+function drawPoint(
+  ctx: CanvasRenderingContext2D,
+  camera: Camera,
+  radius: number,
+  goldPerSecond: number,
+  e: ViewEntity,
+  opts: RenderOptions,
+): void {
+  const p = camera.toScreen(e.x, e.y);
+  const r = radius * camera.scale;
+  const color = teamColor(e.owner, opts.colors).fill;
+  ctx.save();
+
+  // Neutral points: faint and dashed. Owned points: tinted with a solid ring.
+  const neutral = e.owner < 0;
+  ctx.globalAlpha = neutral ? 0.08 : 0.22;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.globalAlpha = neutral ? 0.7 : 0.95;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = neutral ? 2 : 3;
+  if (neutral) ctx.setLineDash([8, 6]);
+  ctx.beginPath();
+  ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  const capture = e.capture;
+  if (capture && capture.by >= 0 && capture.progress > 0) {
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = teamColor(capture.by, opts.colors).fill;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, -Math.PI / 2, -Math.PI / 2 + capture.progress * Math.PI * 2);
+    ctx.stroke();
+  }
+
+  const d = Math.max(7, 11 * camera.scale);
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = e.owner < 0 ? "#1e293b" : color;
+  ctx.strokeStyle = e.owner < 0 ? COLORS.neutral : "#f8fafc";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y - d);
+  ctx.lineTo(p.x + d, p.y);
+  ctx.lineTo(p.x, p.y + d);
+  ctx.lineTo(p.x - d, p.y);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  ctx.fillStyle = "#facc15";
+  ctx.font = `600 ${Math.max(10, 12 * camera.scale)}px system-ui, sans-serif`;
+  ctx.textAlign = "center";
+  ctx.textBaseline = "top";
+  ctx.fillText(`+${goldPerSecond}`, p.x, p.y + d + 3);
+  ctx.restore();
 }
 
 /**

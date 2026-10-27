@@ -1,3 +1,4 @@
+import { isAttackable } from "../world";
 import { ownedMovableUnits } from "./helpers";
 import type { CommandHandler } from "./types";
 
@@ -5,7 +6,7 @@ import type { CommandHandler } from "./types";
 export const attack: CommandHandler<"attack"> = {
   validate(world, player, cmd, game) {
     const target = world.entities[cmd.target];
-    if (!target || target.owner === player) return null;
+    if (!target || target.owner === player || !isAttackable(target, game)) return null;
     const units = ownedMovableUnits(world, player, cmd.units, game).filter(
       (id) => game.defs[world.entities[id]!.type]!.attack !== null,
     );

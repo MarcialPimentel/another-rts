@@ -8,7 +8,11 @@ export interface EntityDefData {
   name: string;
   /** One line for players: the unit's role and what it's good against. Shown in the HUD. */
   description?: string;
-  kind: "unit" | "building";
+  /**
+   * "point" is a capture point: a map object with no HP that units never attack or bump into.
+   * It starts neutral and belongs to whoever captured it last.
+   */
+  kind: EntityKind;
   /** Collision and selection radius in pixels. */
   radius: number;
   hp: number;
@@ -38,7 +42,13 @@ export interface EntityDefData {
   queueMax?: number;
   /** Losing every entity with this flag loses the match. */
   isHeadquarters?: boolean;
+  /** Points only: seconds for one unit to capture it (or neutralize an enemy's). Radius is the capture area. */
+  captureTime?: number;
+  /** Units only: how much this unit counts when capturing (default 1; Raiders 2). */
+  captureWeight?: number;
 }
+
+export type EntityKind = "unit" | "building" | "point";
 
 export type Shape = "circle" | "square" | "triangle" | "hexagon";
 
@@ -47,7 +57,7 @@ export interface EntityDef {
   id: string;
   name: string;
   description: string;
-  kind: "unit" | "building";
+  kind: EntityKind;
   radius: number;
   hp: number;
   cost: number;
@@ -63,6 +73,9 @@ export interface EntityDef {
   produces: string[];
   queueMax: number;
   isHeadquarters: boolean;
+  /** Ticks for one unit to capture this point; 0 for anything that isn't a point. */
+  captureTicks: number;
+  captureWeight: number;
 }
 
 export interface StartingEntity {
@@ -74,6 +87,8 @@ export interface StartingEntity {
 export interface MapData {
   width: number;
   height: number;
+  /** Capture points, neutral at the start of a match. */
+  points: StartingEntity[];
   /** Starting entities for each player slot, in slot order. */
   bases: { entities: StartingEntity[]; rally: { x: number; y: number } }[];
 }
@@ -82,6 +97,8 @@ export interface EconomyData {
   startingGold: number;
   /** Max units (alive plus queued) per player. */
   unitCap: number;
+  /** Total capture weight that counts on a point; more units than this don't capture faster. */
+  captureWeightCap: number;
 }
 
 export interface GameData {

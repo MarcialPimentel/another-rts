@@ -2,7 +2,7 @@ import { perSecondToPerTick, secondsToTicks } from "../sim/constants";
 import { GAME_DATA } from "./game";
 import type { EntityDef, EntityDefData, GameData } from "./types";
 
-export type { EntityDef, EntityDefData, GameData, MapData, EconomyData, Shape } from "./types";
+export type { EntityDef, EntityDefData, EntityKind, GameData, MapData, EconomyData, Shape } from "./types";
 
 /** Converts designer-facing definitions (seconds, per-second rates) into tick-based ones. */
 export function compileDef(d: EntityDefData): EntityDef {
@@ -32,6 +32,8 @@ export function compileDef(d: EntityDefData): EntityDef {
     produces: d.produces ?? [],
     queueMax: d.queueMax ?? 0,
     isHeadquarters: d.isHeadquarters ?? false,
+    captureTicks: d.kind === "point" ? secondsToTicks(d.captureTime ?? 8) : 0,
+    captureWeight: d.kind === "unit" ? (d.captureWeight ?? 1) : 0,
   };
 }
 
@@ -54,6 +56,9 @@ export function compileGame(data: GameData): CompiledGame {
     for (const p of d.produces) {
       if (!defs[p]) throw new Error(`"${d.id}" produces unknown type "${p}"`);
     }
+  }
+  for (const p of data.map.points) {
+    if (defs[p.type]?.kind !== "point") throw new Error(`Map point uses "${p.type}", which isn't a point`);
   }
   return {
     defs,

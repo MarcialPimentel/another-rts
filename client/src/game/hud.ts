@@ -12,6 +12,7 @@ export class Hud {
   readonly bottom: HTMLDivElement;
   private readonly gold: HTMLSpanElement;
   private readonly units: HTMLSpanElement;
+  private readonly points: HTMLSpanElement;
   private readonly status: HTMLSpanElement;
   private readonly panel: HTMLDivElement;
   private lastPanel = "";
@@ -25,10 +26,11 @@ export class Hud {
     this.top = el("div", "hud-top");
     this.gold = el("span", "hud-gold");
     this.units = el("span", "hud-units");
+    this.points = el("span", "hud-points");
     this.status = el("span", "hud-status");
     const build = el("span", "hud-build");
     build.textContent = `build ${__BUILD_ID__}`;
-    this.top.append(this.gold, this.units, this.status, build);
+    this.top.append(this.gold, this.units, this.points, this.status, build);
 
     this.bottom = el("div", "hud-bottom");
     this.panel = el("div", "hud-panel");
@@ -39,8 +41,14 @@ export class Hud {
 
   update(view: ViewState): void {
     const me = view.players[this.session.localPlayer];
-    this.gold.textContent = `Gold ${me ? me.gold : 0}`;
     const mine = view.entities.filter((e) => e.owner === this.session.localPlayer);
+    // Income shown per second: the HQ plus every point you own.
+    const income = mine.reduce((sum, e) => sum + (this.game.defs[e.type]?.incomePerTick ?? 0), 0) * 20;
+    this.gold.textContent = `Gold ${me ? me.gold : 0} (+${Math.round(income)}/s)`;
+    const allPoints = view.entities.filter((e) => this.game.defs[e.type]?.kind === "point");
+    const owned = allPoints.filter((e) => e.owner === this.session.localPlayer).length;
+    const theirs = allPoints.filter((e) => e.owner >= 0 && e.owner !== this.session.localPlayer).length;
+    this.points.textContent = `Points ${owned} · enemy ${theirs} · of ${allPoints.length}`;
     const unitCount =
       mine.filter((e) => this.game.defs[e.type]?.kind === "unit").length +
       mine.reduce((n, e) => n + e.queue.length, 0);
@@ -53,7 +61,7 @@ export class Hud {
     const selected = this.input.selectedEntities();
     let html: string;
     if (selected.length === 0) {
-      html = `<div class="hint">Drag to select units · Right-click to move or attack · A = attack-move · S = stop · Select the Barracks and press Q/W/E/R to train · Arrows or screen edge to scroll</div>`;
+      html = `<div class="hint">Drag to select units · Right-click to move or attack · A = attack-move · S = stop · Select the Barracks and press Q/W/E/R to train · Stand on ◆ points to capture them for gold · Arrows or screen edge to scroll</div>`;
     } else if (selected.length === 1 && this.game.defs[selected[0]!.type]?.kind === "building") {
       const b = selected[0]!;
       const def = this.game.defs[b.type]!;

@@ -83,7 +83,7 @@ The simulation is a plain state object advanced one tick at a time by a fixed se
 
 **World state** holds the tick number, each player's resources and status, and a map of entities keyed by integer ID. It is plain JSON-serializable data, so it can be sent as a snapshot as is. The server assigns IDs and never reuses them within a match.
 
-**Entities** have an ID, an owner, a type ID pointing at its definition, a position, current HP, and optional components: `mover` (target, speed), `attacker` (target, cooldown), `producer` (queue, progress) and `income` (amount per second). Systems act on whichever components an entity has.
+**Entities** have an ID, an owner, a type ID pointing at its definition, a position, current HP, and optional components: `mover` (target, speed), `attacker` (target, cooldown), `producer` (queue, progress), `income` (amount per second) and, for capture points, `capture` (who is capturing, progress). Systems act on whichever components an entity has. Neutral capture points have owner `-1`.
 
 **Definitions** are typed data objects in `shared/data/`, one per unit or building type, holding cost, HP, speed, damage, range, attack interval, build time and which components it gets. A game's whole roster lives here.
 
@@ -96,7 +96,8 @@ The simulation is a plain state object advanced one tick at a time by a fixed se
 5. Movement: move toward targets; apply simple separation so units don't stack.
 6. Combat: units in range with a ready cooldown deal damage.
 7. Deaths: remove entities at 0 HP and clear references to them.
-8. Win check: a player with no Town Hall loses.
+8. Capture: advance or drain capture progress on each point (after deaths, so units killed this tick don't count).
+9. Win check: a player with no HQ loses.
 
 **Movement** in the PoC is straight-line with separation on an open map. Pathfinding is an extension point, added behind the movement system without changing commands.
 
@@ -192,7 +193,7 @@ Two commanders fight over a small map with shape-based armies. Every coin goes t
 3. **Systematic and modular.** Each mechanic is one system (or one data field) with its own tests and its own place in the tick order, added one milestone at a time. New units should be data, not code.
 4. **Short matches.** Target 6–9 minutes, hard ceiling 10. Prefer mechanics that force a result (map control, victory points) over ones that reward turtling.
 
-**Status (2026-10-27):** G1 is built and ready to playtest. Sections below mark what is **built** and what is **planned**.
+**Status (2026-10-27):** G1 and G2 are built; G2 is ready to playtest. Sections below mark what is **built** and what is **planned**.
 
 ### Army: four shapes and a counter loop *(built in G1)*
 
@@ -220,13 +221,19 @@ The counter loop is checked by equal-gold battle tests in `tests/balance.test.ts
 
 **Combat feedback (built in G1):** each unit draws as its shape in its owner's colour, a little larger than its collision circle so shapes read at a glance; Raider triangles point where they face. Attacks show as a slash for melee and a tracer for ranged and siege, hit units flash, and dying units burst. Snapshots carry each attacker's target and how long ago it last fired so both players see the same shots.
 
-### Economy: capture points *(planned, G2)*
+### Economy: capture points *(built in G2)*
 
-Each HQ gives a small trickle; most income comes from **capture points** held on the map. This makes map control the main fight and needs no pathfinding.
+The HQ pays a steady 5 gold/s and **capture points** pay on top of it, so holding the map turns into more army and tech. Points need no pathfinding: they're circles on open ground.
 
-- **Map:** 5 points. One safe point near each base, two contested side points, and a centre point worth more.
-- **Capturing:** units standing on a point with no enemy units nearby take it over about 8 seconds (faster with more units, capped; Raiders count double). An enemy-owned point must be made neutral first. Contested points pause.
-- **Income (starting values):** HQ 3 gold/s, side and safe points +2 gold/s, centre +3 gold/s.
+- **Map:** 5 points, mirrored. One safe point near each base, two contested side points (top and bottom of the middle line), and the centre point.
+- **Capturing:** a unit counts while its centre is inside the point's circle. Each unit adds its capture weight (1, Raiders 2), capped at 3 per point, so one Line takes 8 s, one Raider 4 s, and three Lines (or two Raiders) about 2.7 s.
+- **Enemy points** are made neutral first (one full bar), then captured (a second bar).
+- **Contested:** while units of both players are on a point, progress pauses. Fight to clear it.
+- **Kept after leaving:** a point stays yours until the enemy neutralizes it. Every point can be captured, including the safe one by your base.
+- **Unfinished progress** drains back at one unit's rate when nobody is on the point. The owner standing on their point wipes out an enemy's partial capture.
+- **Points can't be attacked:** units never target them, attack commands on them are dropped, and units walk over them. Clicks on a point select nothing; right-click moves there.
+- **Income:** HQ 5 gold/s; safe and side points +2 gold/s each; centre +3 gold/s. Holding your half (safe + one side) gives 9 gold/s against 5 with no points.
+- **Readability:** neutral points are grey dashed circles; owned points are tinted solid in the owner's colour. A ring fills in the capturing player's colour. Each point shows its income (+2, +3). The HUD shows gold per second and points held by each side.
 - **Economy investment (G3):** *Overclock*, researched at the HQ, adds income per owned point. Strong when you hold the map, wasted when you don't.
 
 ### Tech: tiers and upgrades *(planned, G3)*
@@ -246,7 +253,7 @@ Until G4, the only win is destroying the enemy HQ (or a forfeit).
 
 ### Map and economy (current)
 
-**Map:** 2400 × 1000 px, flat and open, mirrored left to right. Each HQ sits 200 px from its edge. **Economy:** starting gold 200, HQ income 5 gold/s, unit cap 30 units per player (alive plus queued), no upkeep.
+**Map:** 2400 × 1000 px, flat and open, mirrored left to right. Each HQ sits 200 px from its edge. Capture points: safe points at (620, 720) and its mirror, side points at (1200, 160) and (1200, 840), centre at (1200, 500); radius 60 (centre 70). **Economy:** starting gold 200, HQ income 5 gold/s plus points, unit cap 30 units per player (alive plus queued), no upkeep.
 
 ### Game milestones
 
@@ -368,6 +375,7 @@ Record every change to a Core rule here, newest first, with the reason.
 
 | Date | Decision | Reason |
 | --- | --- | --- |
+| 2026-10-27 | Capture points (G2): points stay owned until neutralized; every point, including the safe one, can be captured; a contested point pauses; points pay on top of the HQ, which keeps 5 gold/s (was planned to drop to 3). New tick step "Capture" between deaths and win check | Owner's calls: ownership that persists gives Raiders a raiding job and makes territory matter; capturable safe points keep the army vs economy tension at home; a pause on contested points makes the fight decide it. The owner wants to test a high-gold game first, so points add to the HQ instead of replacing part of it |
 | 2026-10-27 | Game design: one currency split between economy, army and tech; capture-point income; four shared shape units with an armour/bonus-damage counter loop; tiers and research; victory points; matches under 10 minutes. Built in four milestones (G1–G4) | Design session with the owner. Shapes keep art cost at zero while the systems are proven; capture points avoid pathfinding; victory points stop turtling and keep matches short |
 | 2026-10-27 | Another RTS created from rts-template v1.0 with shared history (`upstream` remote). It takes over the marz.gg/games/rts page and the SiteGround secrets; its own Render services are `another-rts-server` and `another-rts-client`, and the template's live deploys are retired | The template isn't played on its own, so the game reuses its page and settings. Only one repo deploys to each place, so template pushes can't overwrite the game |
 | 2026-10-25 | Client also published to marz.gg/games/rts from GitHub Actions over SSH; asset paths are relative so one build works at a root or in a subfolder | Wanted the game on the owner's own domain; the server stays on Render because shared hosting can't run it |

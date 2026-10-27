@@ -5,7 +5,7 @@ import { SnapshotBuffer } from "../client/src/net/snapshot_buffer";
 const view = (tick: number, x: number): ViewState => ({
   tick,
   players: [],
-  entities: [{ id: 1, type: "line", owner: 0, x, y: 0, hp: 100, target: null, lastAttackTick: -1, queue: [], progress: 0, rally: null }],
+  entities: [{ id: 1, type: "line", owner: 0, x, y: 0, hp: 100, target: null, lastAttackTick: -1, queue: [], progress: 0, rally: null, capture: null }],
   status: "playing",
   winner: null,
   endReason: null,

@@ -128,7 +128,8 @@ export class Input {
     let bestScore = Infinity;
     for (const e of this.latest.entities) {
       const def = this.game.defs[e.type];
-      if (!def) continue;
+      // Capture points are ground: clicks on them select nothing and right-clicks move there.
+      if (!def || def.kind === "point") continue;
       const reach = def.radius * (def.kind === "building" ? 0.85 : 1) + 6 / this.camera.scale;
       const d = Math.hypot(e.x - w.x, e.y - w.y);
       if (d > reach) continue;
