@@ -1,8 +1,10 @@
-# RTS Template — Game Design Document
+# Another RTS — Game Design Document
 
 Last updated 2026-10-27 · Owner: Marz
 
-> This file is the source of truth for the template. If it disagrees with any other copy (chat drafts, docs elsewhere), this file wins.
+> This file is the source of truth for Another RTS. If it disagrees with any other copy (chat drafts, docs elsewhere), this file wins.
+
+**Another RTS** is built from `MarcialPimentel/rts-template` v1.0 (the `upstream` remote). The Core sections below come from the template unchanged. The Game layer still holds the template's proof-of-concept ruleset until this game's design replaces it.
 
 ## How to use this template
 
@@ -204,7 +206,7 @@ These numbers are starting points for playtesting, not balanced values. They liv
 The folder layout enforces the architecture: `shared/` may never import from `client/` or `server/`, and only `shared/data/` changes when a new game swaps its content.
 
 ```
-rts-template/
+another-rts/
   docs/GDD.md              this document
   package.json             one package; scripts for dev, build, test
   .nvmrc                   pinned Node version
@@ -237,8 +239,8 @@ Both pieces deploy from `render.yaml` on every push to `main`: the client as a f
 | Piece | PoC host | Notes |
 | --- | --- | --- |
 | Web client | marz.gg/games/rts (SiteGround), published by `.github/workflows/deploy-marz.yml` on every push | Static files, so it loads instantly even while the server sleeps. Needs the four `SITEGROUND_*` repository secrets; skips until they're set |
-| Web client (mirror) | Render static site (`rts-template-client`) | Same build; handy if marz.gg is down |
-| Game server | Render free web service (`rts-template-server`) | Sleeps after 15 minutes idle; waking takes about a minute |
+| Web client (mirror) | Render static site (`another-rts-client`) | Same build; handy if marz.gg is down |
+| Game server | Render free web service (`another-rts-server`) | Sleeps after 15 minutes idle; waking takes about a minute |
 | Fallback server | Own PC plus a free tunnel, or a ~$5/month VPS | `deploy/Dockerfile`; only the server URL changes |
 
 Rules:
@@ -305,6 +307,7 @@ Record every change to a Core rule here, newest first, with the reason.
 
 | Date | Decision | Reason |
 | --- | --- | --- |
+| 2026-10-27 | Another RTS created from rts-template v1.0 with shared history (`upstream` remote). It takes over the marz.gg/games/rts page and the SiteGround secrets; its own Render services are `another-rts-server` and `another-rts-client`, and the template's live deploys are retired | The template isn't played on its own, so the game reuses its page and settings. Only one repo deploys to each place, so template pushes can't overwrite the game |
 | 2026-10-25 | Client also published to marz.gg/games/rts from GitHub Actions over SSH; asset paths are relative so one build works at a root or in a subfolder | Wanted the game on the owner's own domain; the server stays on Render because shared hosting can't run it |
 | 2026-10-25 | Ready-up lobby with colour choice; players keep their own colour on both screens (was: local player always blue, opponent red); rooms return to the lobby after a match instead of a separate rematch step | Playtest feedback: seeing your own colour swapped on the other screen was confusing, and a lobby before the match was wanted |
 | 2026-10-25 | Leaving mid-match forfeits immediately; only dropped connections get the 30 s grace period | Nobody should wait 30 s for a player who chose to leave |

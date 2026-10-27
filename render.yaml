@@ -2,7 +2,7 @@
 # Every push to main redeploys both.
 services:
   - type: web
-    name: rts-template-server
+    name: another-rts-server
     runtime: node
     plan: free
     region: ohio
@@ -16,7 +16,7 @@ services:
         value: "22"
 
   - type: web
-    name: rts-template-client
+    name: another-rts-client
     runtime: static
     branch: main
     buildCommand: npm ci --include=dev && npm run build:client
@@ -28,4 +28,4 @@ services:
       # Single config value for the server address (GDD rule). If Render gives the
       # server a different URL, change it here or in the Render dashboard.
       - key: VITE_SERVER_URL
-        value: wss://rts-template-server.onrender.com
+        value: wss://another-rts-server.onrender.com

@@ -1,5 +1,5 @@
 {
-  "name": "rts-template",
+  "name": "another-rts",
   "version": "0.1.0",
   "private": true,
   "description": "Minimal two-player online browser RTS, used as a template for future RTS games.",

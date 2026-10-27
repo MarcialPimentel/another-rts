@@ -44,7 +44,7 @@ jobs:
           npm run build:client
         env:
           # Same single server-address value as the Render client (GDD rule).
-          VITE_SERVER_URL: wss://rts-template-server.onrender.com
+          VITE_SERVER_URL: wss://another-rts-server.onrender.com
 
       - name: Upload to SiteGround
         if: env.HAS_SECRETS == 'true'
