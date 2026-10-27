@@ -46,7 +46,7 @@ export function startServer(options: ServerOptions): Promise<RunningServer> {
     }
     if (path === "/") {
       res.writeHead(200, { "content-type": "text/plain" });
-      res.end(`RTS Template game server, build ${BUILD_ID}. Connect over WebSocket.`);
+      res.end(`Another RTS game server, build ${BUILD_ID}. Connect over WebSocket.`);
       return;
     }
     res.writeHead(404);

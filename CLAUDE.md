@@ -1,6 +1,6 @@
 # Instructions for AI sessions
 
-This repo is an RTS template: a minimal two-player browser RTS in TypeScript (Node server, Canvas client) that future RTS games are copied from. The owner reviews pull requests and playtests; he does not write the code himself.
+This repo is Another RTS: a two-player browser RTS in TypeScript (Node server, Canvas client), built from `MarcialPimentel/rts-template` v1.0 (the `upstream` remote). Template fixes (networking, lobby, server loop, tooling, deploys) go in rts-template first and are pulled in here; game content goes only here. The owner reviews pull requests and playtests; he does not write the code himself.
 
 ## Before doing anything
 

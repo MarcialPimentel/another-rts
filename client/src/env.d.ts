@@ -2,6 +2,6 @@
 declare const __BUILD_ID__: string;
 
 interface ImportMetaEnv {
-  /** The single server address config value (GDD rule), e.g. wss://rts-template-server.onrender.com */
+  /** The single server address config value (GDD rule), e.g. wss://another-rts-server.onrender.com */
   readonly VITE_SERVER_URL?: string;
 }

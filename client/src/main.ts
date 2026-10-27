@@ -18,7 +18,7 @@ function showMenu(): void {
   const menu = document.createElement("div");
   menu.className = "menu";
   menu.innerHTML = `
-    <h1>RTS Template</h1>
+    <h1>Another RTS</h1>
     <p class="tagline">Two players. One Town Hall each. Destroy theirs.</p>
     <div class="buttons">
       <button class="primary" data-action="online">Play online</button>
