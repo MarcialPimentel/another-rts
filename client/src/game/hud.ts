@@ -1,6 +1,6 @@
-import type { CompiledGame } from "../../../shared/data";
+import type { CompiledGame, Shape } from "../../../shared/data";
 import type { ViewState } from "../../../shared/view";
-import type { Input } from "./input";
+import { TRAIN_KEYS, type Input } from "./input";
 import type { Session } from "./session";
 
 /**
@@ -53,20 +53,21 @@ export class Hud {
     const selected = this.input.selectedEntities();
     let html: string;
     if (selected.length === 0) {
-      html = `<div class="hint">Drag to select units · Right-click to move or attack · A = attack-move · S = stop · Q = train · Arrows or screen edge to scroll</div>`;
+      html = `<div class="hint">Drag to select units · Right-click to move or attack · A = attack-move · S = stop · Select the Barracks and press Q/W/E/R to train · Arrows or screen edge to scroll</div>`;
     } else if (selected.length === 1 && this.game.defs[selected[0]!.type]?.kind === "building") {
       const b = selected[0]!;
       const def = this.game.defs[b.type]!;
       const own = b.owner === this.session.localPlayer;
       const rows = [`<div class="title">${def.name}</div>`, `<div>HP ${Math.ceil(b.hp)} / ${def.hp}</div>`];
       if (def.produces.length && own) {
-        const unit = this.game.defs[def.produces[0]!]!;
         const pending = this.session.pendingTrains(b.id);
         const slots: string[] = [];
         for (let i = 0; i < def.queueMax; i++) {
-          if (i < b.queue.length) {
+          const queued = b.queue[i];
+          if (queued) {
             const pct = i === 0 ? Math.round(b.progress * 100) : 0;
-            slots.push(`<span class="slot filled"><i style="width:${pct}%"></i></span>`);
+            const glyph = SHAPE_GLYPH[this.game.defs[queued]?.shape ?? "circle"];
+            slots.push(`<span class="slot filled">${glyph}<i style="width:${pct}%"></i></span>`);
           } else if (i < b.queue.length + pending) {
             slots.push(`<span class="slot pending"></span>`);
           } else {
@@ -75,12 +76,15 @@ export class Hud {
         }
         const gold = view.players[this.session.localPlayer]?.gold ?? 0;
         const full = b.queue.length + pending >= def.queueMax;
-        const disabled = gold < unit.cost || full ? "disabled" : "";
-        rows.push(`<div class="queue">${slots.join("")}</div>`);
-        rows.push(
-          `<button data-action="train" ${disabled}>Train ${unit.name} (Q) · ${unit.cost} gold</button>`,
-          `<div class="hint">Right-click the ground to set the rally point</div>`,
-        );
+        rows.push(`<div class="queue" title="Right-click the ground to set the rally point">${slots.join("")}</div>`);
+        const buttons = def.produces.map((id, i) => {
+          const unit = this.game.defs[id]!;
+          const key = (TRAIN_KEYS[i] ?? "").toUpperCase();
+          const disabled = gold < unit.cost || full || !key ? "disabled" : "";
+          const tip = `${unit.name}: ${unit.description} (HP ${unit.hp}, ${unit.cost} gold)`;
+          return `<button class="train" data-action="train" data-index="${i}" title="${tip}" ${disabled}><b>${SHAPE_GLYPH[unit.shape]}</b> ${unit.name} <small>${unit.cost}g · ${key}</small></button>`;
+        });
+        rows.push(`<div class="train-row">${buttons.join("")}</div>`);
       } else if (def.incomePerTick > 0) {
         rows.push(`<div class="hint">+${Math.round(def.incomePerTick * 20)} gold per second</div>`);
       }
@@ -114,7 +118,7 @@ export class Hud {
     if (!button) return;
     switch (button.dataset.action) {
       case "train":
-        this.input.train();
+        this.input.train(Number(button.dataset.index ?? 0));
         break;
       case "stop":
         this.input.stop();
@@ -125,6 +129,14 @@ export class Hud {
     }
   }
 }
+
+/** Text stand-ins for each unit shape, used in HUD buttons and queue slots. */
+const SHAPE_GLYPH: Record<Shape, string> = {
+  square: "■",
+  triangle: "▲",
+  circle: "●",
+  hexagon: "⬢",
+};
 
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, className: string): HTMLElementTagNameMap[K] {
   const node = document.createElement(tag);

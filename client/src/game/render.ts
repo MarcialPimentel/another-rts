@@ -1,7 +1,8 @@
-import type { CompiledGame } from "../../../shared/data";
+import type { CompiledGame, Shape } from "../../../shared/data";
 import type { ViewEntity, ViewState } from "../../../shared/view";
 import type { Camera } from "./camera";
 import { COLORS, teamColor } from "./colors";
+import type { Effects } from "./effects";
 
 export interface RenderOptions {
   localPlayer: number;
@@ -10,9 +11,14 @@ export interface RenderOptions {
   selection: ReadonlySet<number>;
   /** Selection box in screen pixels while dragging. */
   dragBox: { x0: number; y0: number; x1: number; y1: number } | null;
+  /** Facing and hit flashes; shots and bursts are drawn by Effects itself. */
+  effects: Effects;
+  now: number;
 }
 
-/** Draws the map and every entity as simple shapes (GDD: art beyond shapes is out of scope). */
+const UNIT_DRAW_SCALE = 1.3;
+
+/** Draws the map and every entity as its shape (GDD Game layer: shapes first, flavour later). */
 export function renderWorld(
   ctx: CanvasRenderingContext2D,
   view: ViewState,
@@ -114,7 +120,8 @@ function drawEntity(
   const def = game.defs[e.type];
   if (!def) return;
   const p = camera.toScreen(e.x, e.y);
-  const r = def.radius * camera.scale;
+  // Units draw a little larger than their collision radius so shapes read at a glance.
+  const r = def.radius * camera.scale * (def.kind === "unit" ? UNIT_DRAW_SCALE : 1);
   const color = teamColor(e.owner, opts.colors);
   const selected = opts.selection.has(e.id);
 
@@ -147,13 +154,25 @@ function drawEntity(
       ctx.fillRect(p.x - w / 2, p.y + size / 2 - 12, w * e.progress, 5);
     }
   } else {
+    // Face the target or the direction of travel, in screen space (the camera may be mirrored).
+    const f = opts.effects.facing(e.id);
+    const ahead = camera.toScreen(e.x + f.x, e.y + f.y);
+    const angle = Math.atan2(ahead.y - p.y, ahead.x - p.x);
     ctx.fillStyle = color.fill;
     ctx.strokeStyle = color.dark;
     ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
+    shapePath(ctx, def.shape, p.x, p.y, r, angle);
     ctx.fill();
     ctx.stroke();
+    const flash = opts.effects.flash(e.id, opts.now);
+    if (flash > 0) {
+      ctx.save();
+      ctx.globalAlpha = 0.75 * flash;
+      ctx.fillStyle = "#ffffff";
+      shapePath(ctx, def.shape, p.x, p.y, r, angle);
+      ctx.fill();
+      ctx.restore();
+    }
   }
 
   if (e.hp < def.hp) {
@@ -165,6 +184,37 @@ function drawEntity(
     ctx.fillStyle = frac > 0.6 ? COLORS.hpGood : frac > 0.3 ? COLORS.hpMid : COLORS.hpLow;
     ctx.fillRect(p.x - w / 2, y, w * frac, 4);
   }
+}
+
+/**
+ * Outline for a unit shape of radius `r`, rotated to `angle` (radians, screen space). Shapes are
+ * scaled so each looks about as big as a circle of that radius.
+ */
+export function shapePath(
+  ctx: CanvasRenderingContext2D,
+  shape: Shape,
+  x: number,
+  y: number,
+  r: number,
+  angle: number,
+): void {
+  ctx.beginPath();
+  if (shape === "circle") {
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    return;
+  }
+  const corners = shape === "triangle" ? 3 : shape === "square" ? 4 : 6;
+  const size = shape === "triangle" ? r * 1.35 : shape === "square" ? r * 1.2 : r * 1.1;
+  // Squares and hexagons sit flat (no rotation); triangles point where the unit faces.
+  const base = shape === "triangle" ? angle : shape === "square" ? Math.PI / 4 : 0;
+  for (let i = 0; i < corners; i++) {
+    const a = base + (i / corners) * Math.PI * 2;
+    const px = x + Math.cos(a) * size;
+    const py = y + Math.sin(a) * size;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {

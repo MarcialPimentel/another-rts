@@ -207,6 +207,27 @@ input {
   height: 4px;
   background: var(--gold);
 }
+.slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+}
+.train-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+button.train {
+  padding: 6px 10px;
+}
+button.train b {
+  font-size: 15px;
+}
+button.train small {
+  color: var(--muted);
+  margin-left: 2px;
+}
 .slot.pending {
   background: rgba(148, 163, 184, 0.25);
 }

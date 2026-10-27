@@ -13,9 +13,12 @@ export interface InputCallbacks {
 
 const DRAG_THRESHOLD = 5;
 
+/** Hotkeys for a producer's units, in the order its definition lists them. */
+export const TRAIN_KEYS = ["q", "w", "e", "r"] as const;
+
 /**
  * Standard RTS controls (GDD): left-click/drag to select, Shift to add, right-click to move,
- * attack or set a rally point, A then left-click to attack-move, S to stop, Q to train.
+ * attack or set a rally point, A then left-click to attack-move, S to stop, Q/W/E/R to train.
  * Input only ever produces commands; it never changes the world.
  */
 export class Input {
@@ -82,10 +85,11 @@ export class Input {
     );
   }
 
-  train(): void {
+  /** Trains the `index`-th unit each selected producer can make (Q = 0, W = 1, ...). */
+  train(index: number): void {
     for (const b of this.selectedProducers()) {
-      const unit = this.game.defs[b.type]!.produces[0]!;
-      this.issue({ type: "train", building: b.id, unit }, "train", null);
+      const unit = this.game.defs[b.type]!.produces[index];
+      if (unit) this.issue({ type: "train", building: b.id, unit }, "train", null);
     }
   }
 
@@ -232,7 +236,10 @@ export class Input {
         this.stop();
         break;
       case "q":
-        this.train();
+      case "w":
+      case "e":
+      case "r":
+        this.train(TRAIN_KEYS.indexOf(key));
         break;
       case "escape":
         if (this.attackMoveArmed) this.attackMoveArmed = false;

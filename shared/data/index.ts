@@ -9,6 +9,7 @@ export function compileDef(d: EntityDefData): EntityDef {
   return {
     id: d.id,
     name: d.name,
+    description: d.description ?? "",
     kind: d.kind,
     radius: d.radius,
     hp: d.hp,

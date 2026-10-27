@@ -6,6 +6,8 @@ export interface EntityDefData {
   /** Stable id used in commands and snapshots, e.g. "line". */
   id: string;
   name: string;
+  /** One line for players: the unit's role and what it's good against. Shown in the HUD. */
+  description?: string;
   kind: "unit" | "building";
   /** Collision and selection radius in pixels. */
   radius: number;
@@ -44,6 +46,7 @@ export type Shape = "circle" | "square" | "triangle" | "hexagon";
 export interface EntityDef {
   id: string;
   name: string;
+  description: string;
   kind: "unit" | "building";
   radius: number;
   hp: number;
