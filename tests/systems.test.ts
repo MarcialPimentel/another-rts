@@ -34,7 +34,8 @@ describe("production", () => {
     expect(s).toBeDefined();
     expect(b.queue).toEqual([]);
     run(w, 200);
-    expect(Math.hypot(s!.x - b.rally!.x, s!.y - b.rally!.y)).toBeLessThan(40);
+    // Units spread into formation slots around the rally point, so allow a couple of rings.
+    expect(Math.hypot(s!.x - b.rally!.x, s!.y - b.rally!.y)).toBeLessThan(80);
     expect(s!.order.kind).toBe("idle");
   });
 

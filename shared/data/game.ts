@@ -7,6 +7,8 @@
  *   Raider ▲ beats Ranged ● and Siege ⬢ (closes the gap fast)
  *   Ranged ● beats Line ■ (bonus vs heavy)
  *   Siege ⬢ beats buildings (bonus vs structure) from outside their reach
+ *
+ * Economy: the HQ pays 5 gold/s; capture points pay on top (+2 each, centre +3).
  */
 import type { GameData } from "./types";
 
@@ -73,6 +75,7 @@ export const GAME_DATA: GameData = {
       speed: 140,
       attack: { damage: 7, interval: 0.6, range: 15 },
       sight: 280,
+      captureWeight: 2,
     },
     {
       id: "ranged",
@@ -106,10 +109,38 @@ export const GAME_DATA: GameData = {
       attack: { damage: 36, interval: 3.0, range: 260, bonus: { structure: 3 } },
       sight: 300,
     },
+    {
+      id: "point",
+      name: "Capture point",
+      description: "Stand on it with no enemies nearby to capture it. Pays its owner gold every second.",
+      kind: "point",
+      radius: 60,
+      hp: 1,
+      income: 2,
+      captureTime: 8,
+    },
+    {
+      id: "centre_point",
+      name: "Centre point",
+      description: "The most valuable point on the map.",
+      kind: "point",
+      radius: 70,
+      hp: 1,
+      income: 3,
+      captureTime: 8,
+    },
   ],
   map: {
     width: MAP_WIDTH,
     height: MAP_HEIGHT,
+    // One safe point near each base, two contested side points and the centre point.
+    points: [
+      { type: "point", x: 620, y: 720 },
+      { type: "point", x: mirror(620), y: 720 },
+      { type: "point", x: MAP_WIDTH / 2, y: 160 },
+      { type: "point", x: MAP_WIDTH / 2, y: MAP_HEIGHT - 160 },
+      { type: "centre_point", x: MAP_WIDTH / 2, y: MAP_HEIGHT / 2 },
+    ],
     bases: [
       {
         entities: [
@@ -130,5 +161,6 @@ export const GAME_DATA: GameData = {
   economy: {
     startingGold: 200,
     unitCap: 30,
+    captureWeightCap: 3,
   },
 };

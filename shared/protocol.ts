@@ -54,13 +54,16 @@ export type ServerMessage =
  * One entity in a snapshot: [id, typeIndex, owner, x, y, hp, attack, producer?].
  * `attack` is 0 for entities that can't attack, else [targetId or 0, ticks since last hit (capped)].
  * `producer` is present only on producers: [queue (type indexes), progress 0-100, rallyX, rallyY].
+ * Capture points send 0 in the producer slot, then [capturing player or -1, progress 0-100].
  * Numbers are rounded to keep messages small.
  */
 export type EncodedAttack = 0 | [number, number];
 export type EncodedProducer = [number[], number, number, number];
+export type EncodedCapture = [number, number];
 export type EncodedEntity =
   | [number, number, number, number, number, number, EncodedAttack]
-  | [number, number, number, number, number, number, EncodedAttack, EncodedProducer];
+  | [number, number, number, number, number, number, EncodedAttack, EncodedProducer]
+  | [number, number, number, number, number, number, EncodedAttack, 0, EncodedCapture];
 
 /** Attack ages at or above this are sent as "long ago" (no shot to draw). */
 export const ATTACK_AGE_CAP = 99;
@@ -102,7 +105,13 @@ export function encodeSnapshot(world: World, game: CompiledGame, ack = 0): Encod
       Math.ceil(ent.hp),
       attack,
     ];
-    if (def.produces.length > 0) {
+    if (def.kind === "point") {
+      e.push([
+        ...base,
+        0,
+        [ent.captureBy, Math.min(100, Math.floor((ent.captureProgress / def.captureTicks) * 100))],
+      ]);
+    } else if (def.produces.length > 0) {
       const next = ent.queue[0];
       const total = next ? game.defs[next]!.buildTicks : 0;
       e.push([
@@ -138,6 +147,7 @@ export function decodeSnapshot(s: EncodedSnapshot, typeIds: string[]): ViewState
     entities: s.e.map((raw): ViewEntity => {
       const [id, t, owner, x, y, hp, attack] = raw;
       const prod = raw.length === 8 ? raw[7] : null;
+      const cap = raw.length === 9 ? raw[8] : null;
       const age = attack === 0 ? ATTACK_AGE_CAP : attack[1];
       return {
         id,
@@ -151,6 +161,7 @@ export function decodeSnapshot(s: EncodedSnapshot, typeIds: string[]): ViewState
         queue: prod ? prod[0].map((q) => typeIds[q] ?? "unknown") : [],
         progress: prod ? prod[1] / 100 : 0,
         rally: prod ? { x: prod[2], y: prod[3] } : null,
+        capture: cap ? { by: cap[0], progress: cap[1] / 100 } : null,
       };
     }),
     status: s.st === 1 ? "ended" : "playing",

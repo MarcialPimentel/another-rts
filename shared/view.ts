@@ -18,6 +18,8 @@ export interface ViewEntity {
   /** Progress of the first queued item, 0..1. */
   progress: number;
   rally: Vec | null;
+  /** Capture points only: who is capturing (a player id, or -1) and how far, 0..1. */
+  capture: { by: number; progress: number } | null;
 }
 
 export interface ViewPlayer {
@@ -41,6 +43,7 @@ export function worldToView(world: World, game: CompiledGame = GAME): ViewState 
     tick: world.tick,
     players: world.players.map((p) => ({ id: p.id, gold: Math.floor(p.gold), defeated: p.defeated })),
     entities: Object.values(world.entities).map((e) => {
+      const def = game.defs[e.type]!;
       const next = e.queue[0];
       const total = next ? game.defs[next]!.buildTicks : 0;
       return {
@@ -55,6 +58,10 @@ export function worldToView(world: World, game: CompiledGame = GAME): ViewState 
         queue: [...e.queue],
         progress: total > 0 ? Math.min(1, e.progress / total) : 0,
         rally: e.rally ? { ...e.rally } : null,
+        capture:
+          def.kind === "point"
+            ? { by: e.captureBy, progress: Math.min(1, e.captureProgress / def.captureTicks) }
+            : null,
       };
     }),
     status: world.status,

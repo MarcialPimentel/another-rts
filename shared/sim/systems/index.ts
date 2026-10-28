@@ -1,4 +1,5 @@
 import type { System } from "../step";
+import { capture } from "./capture";
 import { combat } from "./combat";
 import { deaths } from "./deaths";
 import { income } from "./income";
@@ -11,4 +12,4 @@ import { winCheck } from "./win_check";
  * Systems in the GDD's tick order (commands are applied before these, in `step`).
  * Order affects outcomes, so change it only deliberately and record the change in the GDD.
  */
-export const SYSTEMS: System[] = [income, production, targeting, movement, combat, deaths, winCheck];
+export const SYSTEMS: System[] = [income, production, targeting, movement, combat, deaths, capture, winCheck];

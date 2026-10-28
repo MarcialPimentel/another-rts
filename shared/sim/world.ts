@@ -1,5 +1,8 @@
 import { GAME, type CompiledGame } from "../data";
 
+/** Owner of a capture point nobody holds. */
+export const NEUTRAL = -1;
+
 export interface Vec {
   x: number;
   y: number;
@@ -37,6 +40,10 @@ export interface Entity {
   progress: number;
   /** Where newly trained units walk to (producers). */
   rally: Vec | null;
+  /** Points: the player whose capture is in progress, or NEUTRAL. */
+  captureBy: number;
+  /** Points: ticks of capture progress by `captureBy` (full at the point's captureTicks). */
+  captureProgress: number;
 }
 
 export interface PlayerState {
@@ -83,6 +90,8 @@ export function spawnEntity(
     queue: [],
     progress: 0,
     rally: null,
+    captureBy: NEUTRAL,
+    captureProgress: 0,
   };
   world.entities[entity.id] = entity;
   return entity;
@@ -99,6 +108,7 @@ export function createWorld(game: CompiledGame = GAME, playerCount = game.map.ba
     winner: null,
     endReason: null,
   };
+  for (const point of game.map.points) spawnEntity(world, NEUTRAL, point.type, point.x, point.y, game);
   for (let p = 0; p < playerCount; p++) {
     world.players.push({ id: p, gold: game.economy.startingGold, defeated: false });
     const base = game.map.bases[p];
@@ -114,6 +124,11 @@ export function createWorld(game: CompiledGame = GAME, playerCount = game.map.ba
 /** Entities in ascending id order. Systems iterate in this order so results are deterministic. */
 export function entityList(world: World): Entity[] {
   return Object.values(world.entities);
+}
+
+/** Whether units can attack this kind of entity. Capture points can't be attacked. */
+export function isAttackable(e: Entity, game: CompiledGame): boolean {
+  return game.defs[e.type]!.kind !== "point";
 }
 
 export function getEntity(world: World, id: number | null | undefined): Entity | undefined {
