@@ -9,6 +9,7 @@ const view = (tick: number, x: number): ViewState => ({
   status: "playing",
   winner: null,
   endReason: null,
+  deaths: [],
 });
 
 describe("SnapshotBuffer", () => {

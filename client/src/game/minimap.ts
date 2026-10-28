@@ -1,8 +1,11 @@
 import type { CompiledGame } from "../../../shared/data";
 import type { ViewState } from "../../../shared/view";
 import type { Camera } from "./camera";
+import { visionCircles } from "../../../shared/sim/vision";
 import { COLORS, teamColor } from "./colors";
+import { FogLayer } from "./fog";
 import type { Input } from "./input";
+import { pointUnderAttack } from "./render";
 
 /** Minimap size in CSS pixels; the map's 2.4:1 shape fits the bottom HUD bar. */
 const WIDTH = 192;
@@ -10,13 +13,15 @@ const WIDTH = 192;
 /**
  * The whole map in the corner of the HUD: points, buildings and units in player colours, and
  * the camera's view as a box. Left-click or drag moves the camera; right-click orders selected
- * units there. It draws only what the view contains, so it will show fog of war for free.
+ * units there. It shows your vision as on the main map: dimmed outside it, and enemy units only
+ * where you can see them (the snapshot has no others). Your points under attack pulse red.
  */
 export class Minimap {
   readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
   private readonly height: number;
   private dragging = false;
+  private readonly fog = new FogLayer(1);
 
   constructor(
     parent: HTMLElement,
@@ -77,7 +82,7 @@ export class Minimap {
     this.camera.lookAt(w.x, w.y);
   }
 
-  draw(view: ViewState, colors: readonly number[]): void {
+  draw(view: ViewState, colors: readonly number[], localPlayer: number, now: number): void {
     const ctx = this.ctx;
     const k = WIDTH / this.game.map.width;
     ctx.fillStyle = COLORS.ground;
@@ -97,6 +102,16 @@ export class Minimap {
         ctx.arc(x, y, Math.max(3, def.radius * k), 0, Math.PI * 2);
         ctx.stroke();
         ctx.globalAlpha = 1;
+        if (pointUnderAttack(e, localPlayer)) {
+          const pulse = (now % 900) / 900;
+          ctx.globalAlpha = 1 - pulse;
+          ctx.strokeStyle = COLORS.attack;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(x, y, Math.max(3, def.radius * k) + 2 + pulse * 8, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
       } else if (def.kind === "building") {
         const s = Math.max(5, def.radius * k * 1.6);
         ctx.fillStyle = color.fill;
@@ -108,6 +123,15 @@ export class Minimap {
         ctx.fillStyle = color.fill;
         ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
       }
+    }
+
+    if (view.status === "playing") {
+      const circles = visionCircles(view.entities, localPlayer, this.game).map((c) => ({
+        x: this.camera.viewX(c.x) * k,
+        y: c.y * k,
+        r: c.r * k,
+      }));
+      this.fog.draw(ctx, WIDTH, this.height, circles, 30 * k);
     }
 
     // The camera's view.

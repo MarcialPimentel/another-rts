@@ -67,7 +67,7 @@ flowchart LR
     subgraph Server["Game server (Node)"]
         Val["Validate commands<br/>ownership, cost, cap; else dropped"]
         Sim["Simulation, 20 ticks/s<br/>income, production, combat, win"]
-        Snap["Snapshot<br/>full state sent to both players"]
+        Snap["Snapshot per player<br/>filtered to what they can see"]
     end
     Input -- "commands over wss" --> Val
     Val --> Sim --> Snap
@@ -81,7 +81,7 @@ The client never changes the world itself: its clicks become commands, and what 
 
 The simulation is a plain state object advanced one tick at a time by a fixed sequence of systems.
 
-**World state** holds the tick number, each player's resources and status, and a map of entities keyed by integer ID. It is plain JSON-serializable data, so it can be sent as a snapshot as is. The server assigns IDs and never reuses them within a match.
+**World state** holds the tick number, each player's resources and status, a map of entities keyed by integer ID, and the deaths of the last second (so clients under fog of war can tell a death from a unit leaving their sight). It is plain JSON-serializable data, so it can be sent as a snapshot as is. The server assigns IDs and never reuses them within a match.
 
 **Entities** have an ID, an owner, a type ID pointing at its definition, a position, current HP, and optional components: `mover` (target, speed), `attacker` (target, cooldown), `producer` (queue, progress), `income` (amount per second) and, for capture points, `capture` (who is capturing, progress). Systems act on whichever components an entity has. Neutral capture points have owner `-1`.
 
@@ -95,7 +95,7 @@ The simulation is a plain state object advanced one tick at a time by a fixed se
 4. Targeting: idle and attack-moving units acquire the nearest enemy in sight range.
 5. Movement: move toward targets; apply simple separation so units don't stack.
 6. Combat: units in range with a ready cooldown deal damage.
-7. Deaths: remove entities at 0 HP and clear references to them.
+7. Deaths: remove entities at 0 HP, clear references to them, and remember each death for one second.
 8. Capture: advance or drain capture progress on each point (after deaths, so units killed this tick don't count).
 9. Win check: a player with no HQ loses.
 
@@ -127,7 +127,7 @@ Rules:
 
 ## Network protocol *(Core)*
 
-Clients talk to the server over secure WebSockets; commands go up, full-state snapshots come down 20 times a second.
+Clients talk to the server over secure WebSockets; commands go up, and each player's snapshot of what they can see comes down 20 times a second.
 
 **Transport.** The browser's native `WebSocket` on the client and the `ws` library on the server, over `wss://` (browsers cannot use UDP, and an HTTPS page requires secure sockets). TLS is terminated by the host. Messages are JSON, typed in `shared/protocol.ts`. Messages SHOULD go through a thin `NetProtocol` layer so the transport or encoding can be swapped (for example to WebRTC or binary) without touching game code.
 
@@ -148,13 +148,13 @@ Clients talk to the server over secure WebSockets; commands go up, full-state sn
 | Server → client | `room` | Lobby status: code, phase, your slot, who's connected, colours, who's ready, countdown |
 | Server → client | `error` | Unknown room, full room, or malformed message |
 | Server → client | `match_start` | Your player slot, both players' colours, and the entity type list for decoding snapshots |
-| Server → client | `snapshot` | Tick number, your last applied `seq`, full entity and resource state, match result |
+| Server → client | `snapshot` | Tick number, your last applied `seq`, the entities and resources you can see, recent deaths, match result |
 | Server → client | `match_end` | Winner and reason |
 | Server → client | `opponent_disconnected` | The opponent dropped; time until they forfeit |
 | Server → client | `pong` | Latency reply |
 | Server → client | `room_closed` | The room was cleaned up |
 
-**Snapshots.** The server sends the full state every tick (20 Hz), including each player's research, encoded compactly: each entity is a short array of rounded numbers, so a 60-unit battle is under 3 KB, and WebSocket compression shrinks it further. This matters on free hosting with a monthly bandwidth allowance. Delta compression is an extension point for when unit counts grow.
+**Snapshots.** The server sends each player the state every tick (20 Hz), filtered by fog of war to what that player can see (see Camera and fog of war), including each player's research and recent deaths, encoded compactly: each entity is a short array of rounded numbers, so a 60-unit battle is under 3 KB, and WebSocket compression shrinks it further. This matters on free hosting with a monthly bandwidth allowance. Delta compression is an extension point for when unit counts grow.
 
 **Interpolation.** Clients render about 100 ms behind the newest snapshot and interpolate positions between the two snapshots around that time. This hides jitter at the cost of a small, constant delay.
 
@@ -196,7 +196,7 @@ Two commanders fight over a small map with shape-based armies. Every coin goes t
 3. **Systematic and modular.** Each mechanic is one system (or one data field) with its own tests and its own place in the tick order, added one milestone at a time. New units should be data, not code.
 4. **Short matches.** Target 6–9 minutes, hard ceiling 10. Prefer mechanics that force a result (map control, victory points) over ones that reward turtling.
 
-**Status (2026-10-28):** G1–G3 are built; G3 is ready to playtest. G4 has started with the zoomable camera and minimap. Sections below mark what is **built** and what is **planned**.
+**Status (2026-10-28):** G1–G3 are built; G3 is ready to playtest. G4 (camera and fog of war) is built and ready to playtest. Sections below mark what is **built** and what is **planned**.
 
 ### Army: four shapes and a counter loop *(built in G1)*
 
@@ -258,19 +258,20 @@ Tech is bought at the HQ with the same gold as army and economy. Research is per
 - **HQ panel:** one button per upgrade (Tier 2, Weapons, Armour, Overclock on Q/W/E/R). A button moves on to the next level once the previous one is done, and locked buttons say what they need. The Barracks shows locked units as "needs Tier 2".
 - **No building placement yet.** Tech lives in the pre-placed HQ.
 
-### Camera and fog of war *(G4: camera built, fog planned)*
+### Camera and fog of war *(built in G4)*
 
 The map is bigger than one screen at a comfortable zoom, so players move the camera and zoom (see Controls), with a minimap for the whole picture. Map size stays 2400 × 1000: zoomed out, the whole map fits a typical browser window.
 
-**Fog of war (planned):** you only see enemy units within sight of your own units and buildings.
+**Fog of war:** you only see enemy units within sight of your own units and buildings.
 
-- The server filters each player's snapshot to what they can see, so hidden units never reach the client (no cheating through dev tools). This replaces "full state sent to both players" in the Network protocol.
-- **Look:** areas in vision draw normally; the rest is dimmed and desaturated, with soft edges. No black unexplored layer: the map is small, mirrored and known.
-- Enemy units fade in and out at the edge of vision.
-- Buildings are always visible (they're pre-placed); their HP updates only while seen.
-- Capture points: ownership is always visible; capture progress only where you have vision, plus a warning when one of your points is being taken.
-- Enemy tech in the top bar stays visible for now.
-- The sandbox shows the fog of the player being controlled; the minimap shows your vision.
+- **Vision:** every unit and building sees a circle of its own radius plus its `sight` (the same distance idle units notice enemies at). Sight: Line 250, Raider 280, Ranged 280, Siege 300, HQ 350, Barracks 300 px. An enemy is visible while any part of it is inside one of your circles.
+- **The server filters** each player's snapshot (`PlayerVision` in `shared/sim/vision.ts`), so hidden units never reach the client: no cheating through dev tools. The sandbox runs the same filter for the player being controlled.
+- **Enemy buildings** are always shown (they're pre-placed), but their HP only updates while seen, and their production queue and rally point are never shown.
+- **Capture points:** ownership is always shown; capture progress only where you can see, and always on your own points. While the enemy is taking one of yours, a red ring pulses around it (above the fog), the minimap point pulses, and the top bar warns "a point is under attack".
+- **Hidden info:** enemy gold is never sent. Enemy research stays public in the top bar for now.
+- **Look:** inside your vision draws normally; outside is desaturated and darkened (about 40%), with soft edges, and the minimap shows the same. No black unexplored layer: the map is small, mirrored and known.
+- **Fades:** enemy units fade in as they come into sight and fade out where last seen as they leave it; only real deaths (from the snapshot's death list) burst.
+- When the match ends, everything is revealed.
 
 ### Win condition and pacing *(planned, G5)*
 
@@ -351,7 +352,7 @@ Rules:
 Game rules are proven by headless tests that feed commands into the simulation and check the outcome, so AI-written changes are verified without manual play.
 
 - **Simulation tests (MUST, run on every push):** build a world, apply a scripted list of commands, run N ticks, assert on state. Examples: a `train` with too little gold is rejected; 10 Soldiers beat 5; a Town Hall at 0 HP ends the match; commands for another player's units are ignored.
-- **Server integration tests (MUST, run on every push once networking exists):** start the real server, connect two scripted clients, create and join a room, play commands through to a result, and check both clients received the same snapshots.
+- **Server integration tests (MUST, run on every push once networking exists):** start the real server, connect two scripted clients, create and join a room, play commands through to a result, and check both clients see the same world (through their own fog of war).
 - **Two-client local test (each networking PR):** run the server and two browser tabs on one machine, play a match, and confirm both screens agree.
 - **Latency test (before calling the PoC done):** play with 150 ms of added latency and confirm controls still feel responsive. Add `?lag=150` to the game URL to simulate it (half on send, half on receive). Measured 2026-10-25: markers, sound and pending trains appear within one frame; units start moving on screen about 255 ms after a click (150 ms round trip + 100 ms interpolation delay + up to one tick).
 - **Online playtest (milestone gate):** two people on different networks complete a match against the deployed server.
@@ -404,7 +405,8 @@ Record every change to a Core rule here, newest first, with the reason.
 
 | Date | Decision | Reason |
 | --- | --- | --- |
-| 2026-10-28 | New G4 · Camera and fog of war, before win and pacing (now G5). Camera zooms 0.5×–1.6× (out to the whole map fitting the window) with a minimap; map stays 2400 × 1000. Fog will be server-filtered snapshots, drawn as dimmed areas without a black unexplored layer | Owner's call. Zoom and a minimap let players manage the map in any browser window; fog makes scouting and vision matter. Fog changes balance (Siege outranges sight and needs a spotter), so the balance pass waits for it. Filtering on the server is the only cheat-proof fog |
+| 2026-10-28 | Fog of war (G4): **Core change** — snapshots are now filtered per player instead of the full state to both. Vision is each entity's radius plus `sight`; buildings got sight (HQ 350, Barracks 300). Enemy buildings always shown with last-seen HP; points always show ownership, and capture progress only in vision or on your own points. Enemy gold hidden, research public. The world remembers deaths for one second | Filtering on the server is the only cheat-proof fog. Reusing `sight` keeps one number per unit for "how far it notices" and "how far it sees". The death memory lets clients tell a kill (burst) from a unit leaving sight (fade), even if a frame skips a snapshot |
+| 2026-10-28 | New G4 · Camera and fog of war, before win and pacing (now G5). Camera zooms 0.5×–1.6× (out to the whole map fitting the window) with a minimap; map stays 2400 × 1000. Fog will be server-filtered snapshots, drawn as dimmed areas without a black unexplored layer | Owner's call. Zoom and a minimap let players manage the map in any browser window; fog makes scouting and vision matter. Fog changes balance (scouting and map vision now matter), so the balance pass waits for it. Filtering on the server is the only cheat-proof fog |
 | 2026-10-28 | Tech (G3): Tier 1 trains Line, Raider and Ranged; Tier 2 unlocks Siege, level 2 upgrades and Overclock. Weapons/Armour are ±15% per level, two levels each. Overclock needs Tier 2. New `research` command; research runs per player inside the production step (tick order unchanged) | Owner's calls. The GDD planned Tier 1 as Line and Raider only, but nothing at Tier 1 would then beat Line, so the opening would be "mass Line"; adding Ranged keeps the counter loop from minute one. Percentage upgrades keep counters intact at every level. Overclock behind Tier 2 makes Tier 2 the gateway to both late army and late economy |
 | 2026-10-27 | Capture points (G2): points stay owned until neutralized; every point, including the safe one, can be captured; a contested point pauses; points pay on top of the HQ, which keeps 5 gold/s (was planned to drop to 3). New tick step "Capture" between deaths and win check | Owner's calls: ownership that persists gives Raiders a raiding job and makes territory matter; capturable safe points keep the army vs economy tension at home; a pause on contested points makes the fight decide it. The owner wants to test a high-gold game first, so points add to the HQ instead of replacing part of it |
 | 2026-10-27 | Game design: one currency split between economy, army and tech; capture-point income; four shared shape units with an armour/bonus-damage counter loop; tiers and research; victory points; matches under 10 minutes. Built in four milestones (G1–G4) | Design session with the owner. Shapes keep art cost at zero while the systems are proven; capture points avoid pathfinding; victory points stop turtling and keep matches short |

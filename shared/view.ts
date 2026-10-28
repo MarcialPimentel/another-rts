@@ -40,6 +40,8 @@ export interface ViewState {
   status: "playing" | "ended";
   winner: number | null;
   endReason: string | null;
+  /** Ids of entities that died in the last second; anything else that vanishes left your sight. */
+  deaths: number[];
 }
 
 export function worldToView(world: World, game: CompiledGame = GAME): ViewState {
@@ -79,6 +81,7 @@ export function worldToView(world: World, game: CompiledGame = GAME): ViewState 
     status: world.status,
     winner: world.winner,
     endReason: world.endReason,
+    deaths: world.recentDeaths.map((d) => d.id),
   };
 }
 

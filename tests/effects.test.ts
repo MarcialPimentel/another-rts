@@ -61,14 +61,37 @@ describe("combat effects", () => {
     expect(fx.flash(b.id, now + 500)).toBe(0);
   });
 
-  it("bursts where an entity disappears", () => {
+  it("bursts where a unit dies", () => {
     const w = createWorld();
     const u = spawnEntity(w, 0, "raider", 1000, 500);
     const fx = new Effects();
     fx.observe(worldToView(w), GAME, 0);
-    delete w.entities[u.id];
+    u.hp = 0;
+    step(w);
     fx.observe(worldToView(w), GAME, 50);
     expect(fx.stats().bursts).toBe(1);
+    expect(fx.stats().ghosts).toBe(0);
+  });
+
+  it("fades out, without a burst, a unit that left sight (fog of war)", () => {
+    const w = createWorld();
+    const u = spawnEntity(w, 1, "raider", 1000, 500);
+    const fx = new Effects();
+    fx.observe(worldToView(w), GAME, 0);
+    delete w.entities[u.id]; // gone from the snapshot, but not in the death list
+    fx.observe(worldToView(w), GAME, 50);
+    expect(fx.stats().bursts).toBe(0);
+    expect(fx.stats().ghosts).toBe(1);
+  });
+
+  it("fades in units that appear after the first view", () => {
+    const w = createWorld();
+    const fx = new Effects();
+    fx.observe(worldToView(w), GAME, 0);
+    const u = spawnEntity(w, 1, "raider", 1000, 500);
+    fx.observe(worldToView(w), GAME, 100);
+    expect(fx.alpha(u.id, 100)).toBe(0);
+    expect(fx.alpha(u.id, 1000)).toBe(1);
   });
 
   it("faces the unit toward its target", () => {

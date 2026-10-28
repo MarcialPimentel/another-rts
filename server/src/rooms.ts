@@ -9,6 +9,7 @@ import {
 import type { Command, PlayerCommand } from "../../shared/sim/commands";
 import { forfeit } from "../../shared/sim/match";
 import { step } from "../../shared/sim/step";
+import { PlayerVision } from "../../shared/sim/vision";
 import { createWorld, type World } from "../../shared/sim/world";
 import { DEFAULT_COLORS, PLAYER_COLORS } from "../../shared/lobby";
 import type { Connection } from "./net";
@@ -42,6 +43,8 @@ interface QueuedCommand extends PlayerCommand {
 export class Room {
   phase: RoomPhase = "waiting";
   readonly slots: (Connection | null)[] = Array(PLAYERS_PER_ROOM).fill(null);
+  /** Fog of war per player slot, reset each match. */
+  private visions: PlayerVision[] = [];
   world: World | null = null;
   /** Last command seq applied by the simulation, per player. */
   readonly acks: number[] = Array(PLAYERS_PER_ROOM).fill(0);
@@ -190,6 +193,7 @@ export class Room {
   private startMatch(now: number): void {
     this.phase = "playing";
     this.world = createWorld(this.game, PLAYERS_PER_ROOM);
+    this.visions = Array.from({ length: PLAYERS_PER_ROOM }, (_, slot) => new PlayerVision(slot));
     this.queue = [];
     this.acks.fill(0);
     this.forfeitAt.fill(null);
@@ -217,12 +221,14 @@ export class Room {
     this.broadcastRoomState(now);
   }
 
+  /** Each player gets their own snapshot, filtered to what they can see (fog of war). */
   private broadcastSnapshot(): void {
-    const snapshot = encodeSnapshot(this.world!, this.game);
     for (let slot = 0; slot < PLAYERS_PER_ROOM; slot++) {
+      // Run every player's vision each tick, connected or not, so remembered building HP stays right.
+      const seen = this.visions[slot]!.apply(this.world!, this.game);
       const conn = this.slots[slot];
       if (!conn) continue;
-      snapshot.a = this.acks[slot]!;
+      const snapshot = encodeSnapshot(seen, this.game, this.acks[slot]!);
       conn.sendRaw(JSON.stringify({ t: "snapshot", s: snapshot }));
     }
   }

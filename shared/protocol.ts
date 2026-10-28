@@ -87,9 +87,14 @@ export interface EncodedSnapshot {
   st: 0 | 1;
   w: number | null;
   r: string | null;
+  /** Ids of entities that died in the last second (that the recipient could see). */
+  x: number[];
 }
 
-/** Encodes the world once per tick; `ack` is filled in per recipient. */
+/**
+ * Encodes a world (on the server, each player's fog-filtered copy from PlayerVision) for one
+ * recipient; `ack` is that recipient's last applied command.
+ */
 export function encodeSnapshot(world: World, game: CompiledGame, ack = 0): EncodedSnapshot {
   const typeIndex = new Map(game.typeIds.map((id, i) => [id, i]));
   const researchIndex = new Map(game.researchIds.map((id, i) => [id, i]));
@@ -150,6 +155,7 @@ export function encodeSnapshot(world: World, game: CompiledGame, ack = 0): Encod
     st: world.status === "ended" ? 1 : 0,
     w: world.winner,
     r: world.endReason,
+    x: world.recentDeaths.map((d) => d.id),
   };
 }
 
@@ -190,6 +196,7 @@ export function decodeSnapshot(s: EncodedSnapshot, typeIds: string[], researchId
     status: s.st === 1 ? "ended" : "playing",
     winner: s.w,
     endReason: s.r,
+    deaths: s.x ?? [],
   };
 }
 

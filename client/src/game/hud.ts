@@ -3,6 +3,7 @@ import type { ViewState } from "../../../shared/view";
 import { canTrain, hasResearched, techModifiers } from "../../../shared/sim/tech";
 import type { ViewPlayer } from "../../../shared/view";
 import { TRAIN_KEYS, type Input } from "./input";
+import { pointUnderAttack } from "./render";
 import { researchSlots } from "./research_slots";
 import type { Session } from "./session";
 
@@ -58,7 +59,9 @@ export class Hud {
     const allPoints = view.entities.filter((e) => this.game.defs[e.type]?.kind === "point");
     const owned = allPoints.filter((e) => e.owner === this.session.localPlayer).length;
     const theirs = allPoints.filter((e) => e.owner >= 0 && e.owner !== this.session.localPlayer).length;
-    this.points.textContent = `Points ${owned} · enemy ${theirs} · of ${allPoints.length}`;
+    const raided = allPoints.some((e) => pointUnderAttack(e, this.session.localPlayer));
+    this.points.textContent = `Points ${owned} · enemy ${theirs} · of ${allPoints.length}${raided ? " · ⚠ a point is under attack" : ""}`;
+    this.points.classList.toggle("alert", raided);
     const unitCount =
       mine.filter((e) => this.game.defs[e.type]?.kind === "unit").length +
       mine.reduce((n, e) => n + e.queue.length, 0);

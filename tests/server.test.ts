@@ -72,7 +72,7 @@ describe("game server", () => {
     expect(await c.waitFor("error")).toMatchObject({ code: "bad_message" });
   });
 
-  it("applies a player's command and both players see the same world", async () => {
+  it("applies a player's command; the opponent sees the same world through fog of war", async () => {
     const { a, b } = await startMatch();
     const first = await a.waitFor("snapshot");
     const view = decodeSnapshot(first.s, GAME.typeIds, GAME.researchIds);
@@ -84,9 +84,34 @@ describe("game server", () => {
     expect(ackedView.entities.find((e) => e.id === barracks.id)!.queue).toEqual(["line"]);
     expect(ackedView.players[0]!.gold).toBeLessThan(150);
 
+    // Same tick for the opponent: same buildings and points in the same places, but not
+    // player 1's production queue or gold.
     const sameTick = await b.waitFor("snapshot", (m) => m.s.k === acked.s.k);
-    expect({ ...sameTick.s, a: 0 }).toEqual({ ...acked.s, a: 0 });
+    const theirView = decodeSnapshot(sameTick.s, GAME.typeIds, GAME.researchIds);
+    const placed = (v: typeof theirView) =>
+      v.entities.filter((e) => GAME.defs[e.type]!.kind !== "unit").map((e) => [e.id, e.type, e.owner, e.x, e.y]);
+    expect(placed(theirView)).toEqual(placed(ackedView));
+    expect(theirView.entities.find((e) => e.id === barracks.id)!.queue).toEqual([]);
+    expect(theirView.players[0]!.gold).toBe(0);
+    expect(theirView.players[1]!.gold).toBeGreaterThan(0);
   });
+
+  it("never sends a player enemy units they can't see", async () => {
+    const { a, b } = await startMatch();
+    const first = await a.waitFor("snapshot");
+    const view = decodeSnapshot(first.s, GAME.typeIds, GAME.researchIds);
+    const barracks = view.entities.find((e) => e.owner === 0 && e.type === "barracks")!;
+    a.send({ t: "command", seq: 1, cmd: { type: "train", building: barracks.id, unit: "raider" } });
+    // A Raider takes 4 s (80 ticks) to train; wait until player 1 has it.
+    const trained = await a.waitFor(
+      "snapshot",
+      (m) => decodeSnapshot(m.s, GAME.typeIds, GAME.researchIds).entities.some((e) => e.type === "raider"),
+      8000,
+    );
+    const theirs = await b.waitFor("snapshot", (m) => m.s.k >= trained.s.k);
+    const theirView = decodeSnapshot(theirs.s, GAME.typeIds, GAME.researchIds);
+    expect(theirView.entities.some((e) => e.owner === 0 && GAME.defs[e.type]!.kind === "unit")).toBe(false);
+  }, 10000);
 
   it("ignores commands for the other player's buildings", async () => {
     const { a, b } = await startMatch();
@@ -96,8 +121,11 @@ describe("game server", () => {
     b.send({ t: "command", seq: 1, cmd: { type: "train", building: theirs.id, unit: "line" } });
     const later = await b.waitFor("snapshot", (m) => m.s.k > first.s.k + 4);
     const after = decodeSnapshot(later.s, GAME.typeIds, GAME.researchIds);
-    expect(after.entities.find((e) => e.id === theirs.id)!.queue).toEqual([]);
     expect(after.players[1]!.gold).toBeGreaterThanOrEqual(150);
+    // The owner sees its real queue (the opponent's view of it is always hidden by fog).
+    const ownerView = await a.waitFor("snapshot", (m) => m.s.k >= later.s.k);
+    const owner = decodeSnapshot(ownerView.s, GAME.typeIds, GAME.researchIds);
+    expect(owner.entities.find((e) => e.id === theirs.id)!.queue).toEqual([]);
   });
 
   it("a dropped player forfeits after the grace period", async () => {
