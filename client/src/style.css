@@ -173,10 +173,20 @@ input {
   border-top: 1px solid var(--line);
 }
 .hud-panel {
+  /* Leave room for the minimap on the right. */
+  margin-right: 216px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 8px 16px;
+}
+.minimap {
+  position: absolute;
+  /* Clear of the right-edge scroll band (18 px). */
+  right: 20px;
+  bottom: 8px;
+  border-radius: 3px;
+  cursor: pointer;
 }
 .hud-panel .title {
   font-weight: 600;

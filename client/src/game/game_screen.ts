@@ -5,6 +5,7 @@ import { Effects } from "./effects";
 import { Feedback } from "./feedback";
 import { Hud } from "./hud";
 import { Input, type FeedbackKind } from "./input";
+import { Minimap } from "./minimap";
 import { renderWorld } from "./render";
 import type { Session } from "./session";
 
@@ -31,6 +32,7 @@ export class GameScreen {
   private readonly effects = new Effects();
   private readonly input: Input;
   private readonly hud: Hud;
+  private readonly minimap: Minimap;
   private readonly endOverlay: HTMLDivElement;
   private readonly banner: HTMLDivElement;
   private frame = 0;
@@ -54,6 +56,7 @@ export class GameScreen {
       onCommand: (kind: FeedbackKind, at) => this.feedback.onCommand(kind, at),
     });
     this.hud = new Hud(this.root, GAME, session, this.input);
+    this.minimap = new Minimap(this.hud.bottom, GAME, this.camera, this.input);
 
     this.banner = document.createElement("div");
     this.banner.className = "banner hidden";
@@ -67,6 +70,7 @@ export class GameScreen {
     // Read-only hook for automated browser tests (screenshots, scripted clicks).
     (window as unknown as { __rts: unknown }).__rts = {
       toScreen: (x: number, y: number) => this.camera.toScreen(x, y),
+      camera: () => ({ x: this.camera.x, y: this.camera.y, scale: this.camera.scale }),
       view: () => this.session.view(performance.now()),
       localPlayer: () => this.session.localPlayer,
       effects: () => this.effects.stats(),
@@ -78,6 +82,7 @@ export class GameScreen {
     cancelAnimationFrame(this.frame);
     window.removeEventListener("resize", this.resize);
     this.input.dispose();
+    this.minimap.dispose();
     this.session.dispose();
     this.root.remove();
   }
@@ -103,17 +108,14 @@ export class GameScreen {
   };
 
   private draw(view: ViewState, now: number, dt: number): void {
+    this.input.update(view);
     // Mirror the map for player 2 so the local base is always on the left.
     if (this.flippedFor !== this.session.localPlayer) {
       this.flippedFor = this.session.localPlayer;
       this.camera.flipped = this.session.localPlayer % 2 === 1;
-      const hq = view.entities.find(
-        (e) => e.owner === this.session.localPlayer && GAME.defs[e.type]?.isHeadquarters,
-      );
-      if (hq) this.camera.lookAt(hq.x + 300, hq.y);
+      this.input.focusHome();
     }
 
-    this.input.update(view);
     this.camera.update(dt, this.input.keyPan, this.input.mouse, window.innerWidth);
 
     const ctx = this.ctx;
@@ -134,6 +136,7 @@ export class GameScreen {
     this.feedback.draw(ctx, this.camera, now);
     this.canvas.style.cursor = this.input.attackMoveArmed ? "crosshair" : "default";
     this.hud.update(view);
+    this.minimap.draw(view, this.session.colors);
 
     const alert = this.session.alert?.() ?? null;
     if (alert) {
