@@ -18,6 +18,8 @@ export interface RenderOptions {
 }
 
 const UNIT_DRAW_SCALE = 1.3;
+/** Units never draw smaller than this radius in screen pixels, so shapes read when zoomed out. */
+const MIN_UNIT_RADIUS = 7;
 
 /** Draws the map and every entity as its shape (GDD Game layer: shapes first, flavour later). */
 export function renderWorld(
@@ -128,7 +130,10 @@ function drawEntity(
   }
   const p = camera.toScreen(e.x, e.y);
   // Units draw a little larger than their collision radius so shapes read at a glance.
-  const r = def.radius * camera.scale * (def.kind === "unit" ? UNIT_DRAW_SCALE : 1);
+  const r =
+    def.kind === "unit"
+      ? Math.max(MIN_UNIT_RADIUS, def.radius * camera.scale * UNIT_DRAW_SCALE)
+      : def.radius * camera.scale;
   const color = teamColor(e.owner, opts.colors);
   const selected = opts.selection.has(e.id);
 

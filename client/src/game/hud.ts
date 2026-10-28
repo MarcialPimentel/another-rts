@@ -74,7 +74,7 @@ export class Hud {
     const selected = this.input.selectedEntities();
     let html: string;
     if (selected.length === 0) {
-      html = `<div class="hint">Drag to select units · Right-click to move or attack · A = attack-move · S = stop · Select the Barracks to train (Q/W/E/R) or the HQ to research · Stand on ◆ points to capture them for gold · Arrows or screen edge to scroll</div>`;
+      html = `<div class="hint">Drag to select units · Right-click to move or attack · A = attack-move · S = stop · Select the Barracks to train (Q/W/E/R) or the HQ to research · Stand on ◆ points to capture them for gold · Wheel to zoom · Middle-drag, arrows or screen edge to scroll · Space = your HQ · Click the minimap to jump</div>`;
     } else if (selected.length === 1 && this.game.defs[selected[0]!.type]?.kind === "building") {
       const b = selected[0]!;
       const def = this.game.defs[b.type]!;

@@ -13,6 +13,10 @@ export interface InputCallbacks {
 }
 
 const DRAG_THRESHOLD = 5;
+/** Zoom change per wheel pixel (a typical notch is 100 px, about 16%). */
+const WHEEL_ZOOM = 0.0015;
+/** Zoom step for the + and - keys. */
+const KEY_ZOOM = 1.2;
 
 /** Hotkeys for a producer's units, in the order its definition lists them. */
 export const TRAIN_KEYS = ["q", "w", "e", "r"] as const;
@@ -20,6 +24,7 @@ export const TRAIN_KEYS = ["q", "w", "e", "r"] as const;
 /**
  * Standard RTS controls (GDD): left-click/drag to select, Shift to add, right-click to move,
  * attack or set a rally point, A then left-click to attack-move, S to stop, Q/W/E/R to train.
+ * Camera: wheel or +/- to zoom, middle-drag, arrows or screen edge to pan, Space for your HQ.
  * Input only ever produces commands; it never changes the world.
  */
 export class Input {
@@ -32,6 +37,8 @@ export class Input {
   keyPan = { x: 0, y: 0 };
 
   private dragStart: { x: number; y: number } | null = null;
+  /** Last mouse position while panning with the middle button. */
+  private panFrom: { x: number; y: number } | null = null;
   private keysDown = new Set<string>();
   private latest: ViewState | null = null;
   private readonly cleanups: (() => void)[] = [];
@@ -48,12 +55,14 @@ export class Input {
     this.listen(window, "mouseup", (e) => this.onMouseUp(e as MouseEvent));
     this.listen(document, "mouseleave", () => (this.mouse = null));
     this.listen(canvas, "contextmenu", (e) => e.preventDefault());
+    this.listen(canvas, "wheel", (e) => this.onWheel(e as WheelEvent), { passive: false });
     this.listen(window, "keydown", (e) => this.onKeyDown(e as KeyboardEvent));
     this.listen(window, "keyup", (e) => this.onKeyUp(e as KeyboardEvent));
     this.listen(window, "blur", () => {
       this.keysDown.clear();
       this.keyPan = { x: 0, y: 0 };
       this.mouse = null;
+      this.panFrom = null;
     });
   }
 
@@ -123,9 +132,43 @@ export class Input {
     return this.game.defs[e.type]?.kind === "unit";
   }
 
-  private listen(target: EventTarget, type: string, fn: (e: Event) => void): void {
-    target.addEventListener(type, fn);
-    this.cleanups.push(() => target.removeEventListener(type, fn));
+  /** Right-click at a world position (the minimap): move selected units, or set the rally point. */
+  orderAt(world: { x: number; y: number }): void {
+    const units = this.selectedUnits();
+    if (units.length) {
+      this.issue({ type: "move", units, ...world }, "move", world);
+      return;
+    }
+    for (const b of this.selectedProducers()) this.issue({ type: "set_rally", building: b.id, ...world }, "rally", world);
+  }
+
+  /** Centres the camera on your HQ (Space). */
+  focusHome(): void {
+    const hq = this.latest?.entities.find(
+      (e) => e.owner === this.session.localPlayer && this.game.defs[e.type]?.isHeadquarters,
+    );
+    if (!hq) return;
+    // Look a little towards the middle of the map, where the action is.
+    const towardCentre = hq.x < this.game.map.width / 2 ? 300 : -300;
+    this.camera.lookAt(hq.x + towardCentre, hq.y);
+  }
+
+  private listen(
+    target: EventTarget,
+    type: string,
+    fn: (e: Event) => void,
+    options?: AddEventListenerOptions,
+  ): void {
+    target.addEventListener(type, fn, options);
+    this.cleanups.push(() => target.removeEventListener(type, fn, options));
+  }
+
+  private onWheel(e: WheelEvent): void {
+    e.preventDefault();
+    // Line-mode wheels (Firefox) report rows, not pixels.
+    const px = e.deltaMode === 1 ? e.deltaY * 33 : e.deltaY;
+    const p = this.canvasPoint(e);
+    this.camera.zoomAt(Math.exp(-px * WHEEL_ZOOM), p.x, p.y);
   }
 
   private canvasPoint(e: MouseEvent): { x: number; y: number } {
@@ -167,6 +210,10 @@ export class Input {
       }
       this.dragStart = p;
       this.dragBox = null;
+    } else if (e.button === 1) {
+      // Middle button drags the map; stop the browser's autoscroll.
+      e.preventDefault();
+      this.panFrom = p;
     } else if (e.button === 2) {
       this.attackMoveArmed = false;
       this.onRightClick(p.x, p.y);
@@ -177,6 +224,10 @@ export class Input {
     const p = this.canvasPoint(e);
     const inside = p.x >= 0 && p.y >= 0 && p.x <= this.canvas.clientWidth && p.y <= this.canvas.clientHeight;
     this.mouse = inside ? p : null;
+    if (this.panFrom) {
+      this.camera.panBy(this.panFrom.x - p.x, this.panFrom.y - p.y);
+      this.panFrom = p;
+    }
     if (this.dragStart) {
       const moved = Math.hypot(p.x - this.dragStart.x, p.y - this.dragStart.y);
       if (moved > DRAG_THRESHOLD || this.dragBox) {
@@ -186,6 +237,7 @@ export class Input {
   }
 
   private onMouseUp(e: MouseEvent): void {
+    if (e.button === 1) this.panFrom = null;
     if (e.button !== 0 || !this.dragStart) return;
     const additive = e.shiftKey;
     if (this.dragBox) {
@@ -238,7 +290,7 @@ export class Input {
   private onKeyDown(e: KeyboardEvent): void {
     if (e.target instanceof HTMLInputElement) return;
     const key = e.key.toLowerCase();
-    if (key === "tab") e.preventDefault();
+    if (key === "tab" || key === " ") e.preventDefault();
     if (this.keysDown.has(key)) return;
     this.keysDown.add(key);
     switch (key) {
@@ -254,6 +306,16 @@ export class Input {
       case "r":
         this.train(TRAIN_KEYS.indexOf(key));
         this.research(TRAIN_KEYS.indexOf(key));
+        break;
+      case " ":
+        this.focusHome();
+        break;
+      case "=":
+      case "+":
+        this.camera.zoomCentre(KEY_ZOOM);
+        break;
+      case "-":
+        this.camera.zoomCentre(1 / KEY_ZOOM);
         break;
       case "escape":
         if (this.attackMoveArmed) this.attackMoveArmed = false;

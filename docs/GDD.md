@@ -1,6 +1,6 @@
 # Another RTS — Game Design Document
 
-Last updated 2026-10-27 · Owner: Marz
+Last updated 2026-10-28 · Owner: Marz
 
 > This file is the source of truth for Another RTS. If it disagrees with any other copy (chat drafts, docs elsewhere), this file wins.
 
@@ -170,11 +170,12 @@ The client must feel instant even though nothing happens until the server confir
 - Right-click on ground: `move`. Right-click on an enemy: `attack`. `A` then left-click: `attack_move`. `S`: `stop`.
 - With a Barracks selected: one Train button per unit it can make (hotkeys `Q`, `W`, `E`, `R` in the order the data lists them) sends `train`; right-click on ground sends `set_rally`.
 - With the HQ selected: one Research button per upgrade (hotkeys `Q`, `W`, `E`, `R`) sends `research`.
-- Camera pans with edge scrolling and arrow keys; the PoC map fits about two screens wide.
+- Camera pans with edge scrolling, arrow keys and middle-mouse drag, at the same on-screen speed at any zoom. The mouse wheel (or `+`/`-`) zooms toward the cursor, from 1.6× in to the whole map fitting the window, but never below 0.5× so shapes stay readable. The first view fits the map's height. `Space` centres on your HQ.
+- **Minimap** in the bottom-right of the HUD: the whole map with points, buildings and units in player colours and the camera's view as a box. Left-click or drag moves the camera; right-click moves the selected units (or sets the rally point) there.
 
 **Instant feedback (MUST).** On any command, immediately show a marker at the click point (green for move, red for attack) and play a short click sound, before the server responds. Training shows the queued unit at once, greyed out until the snapshot confirms it.
 
-**HUD:** gold, unit count against cap, the selected entity's HP and production queue, ping in milliseconds, and the room code while waiting.
+**HUD:** gold, unit count against cap, the selected entity's HP and production queue, ping in milliseconds, the minimap, and the room code while waiting.
 
 **Readability:** each player keeps the colour they picked in the lobby on every entity they own, on both players' screens, so both players agree on who is who. HP bars show above damaged entities. The local player's base is always shown on the left of the map for orientation (player 2's view is mirrored).
 
@@ -195,7 +196,7 @@ Two commanders fight over a small map with shape-based armies. Every coin goes t
 3. **Systematic and modular.** Each mechanic is one system (or one data field) with its own tests and its own place in the tick order, added one milestone at a time. New units should be data, not code.
 4. **Short matches.** Target 6–9 minutes, hard ceiling 10. Prefer mechanics that force a result (map control, victory points) over ones that reward turtling.
 
-**Status (2026-10-28):** G1–G3 are built; G3 is ready to playtest. Sections below mark what is **built** and what is **planned**.
+**Status (2026-10-28):** G1–G3 are built; G3 is ready to playtest. G4 has started with the zoomable camera and minimap. Sections below mark what is **built** and what is **planned**.
 
 ### Army: four shapes and a counter loop *(built in G1)*
 
@@ -221,7 +222,7 @@ Stats live in `shared/data/game.ts` and are tuned there; the table in that file 
 
 The counter loop is checked by equal-gold battle tests in `tests/balance.test.ts` at 300, 600 and 1200 gold per side: Line beats Raider, Raider beats Ranged and Siege, Ranged beats Line and Siege, and Siege kills an HQ at least 1.5× faster than anything else for the same gold. A stat change that breaks the loop fails CI.
 
-**Combat feedback (built in G1):** each unit draws as its shape in its owner's colour, a little larger than its collision circle so shapes read at a glance; Raider triangles point where they face. Attacks show as a slash for melee and a tracer for ranged and siege, hit units flash, and dying units burst. Snapshots carry each attacker's target and how long ago it last fired so both players see the same shots.
+**Combat feedback (built in G1):** each unit draws as its shape in its owner's colour, a little larger than its collision circle so shapes read at a glance; Raider triangles point where they face. Units never draw smaller than 7 px in radius on screen, so the shapes still read when zoomed out. Attacks show as a slash for melee and a tracer for ranged and siege, hit units flash, and dying units burst. Snapshots carry each attacker's target and how long ago it last fired so both players see the same shots.
 
 ### Economy: capture points *(built in G2)*
 
@@ -257,12 +258,26 @@ Tech is bought at the HQ with the same gold as army and economy. Research is per
 - **HQ panel:** one button per upgrade (Tier 2, Weapons, Armour, Overclock on Q/W/E/R). A button moves on to the next level once the previous one is done, and locked buttons say what they need. The Barracks shows locked units as "needs Tier 2".
 - **No building placement yet.** Tech lives in the pre-placed HQ.
 
-### Win condition and pacing *(planned, G4)*
+### Camera and fog of war *(G4: camera built, fog planned)*
+
+The map is bigger than one screen at a comfortable zoom, so players move the camera and zoom (see Controls), with a minimap for the whole picture. Map size stays 2400 × 1000: zoomed out, the whole map fits a typical browser window.
+
+**Fog of war (planned):** you only see enemy units within sight of your own units and buildings.
+
+- The server filters each player's snapshot to what they can see, so hidden units never reach the client (no cheating through dev tools). This replaces "full state sent to both players" in the Network protocol.
+- **Look:** areas in vision draw normally; the rest is dimmed and desaturated, with soft edges. No black unexplored layer: the map is small, mirrored and known.
+- Enemy units fade in and out at the edge of vision.
+- Buildings are always visible (they're pre-placed); their HP updates only while seen.
+- Capture points: ownership is always visible; capture progress only where you have vision, plus a warning when one of your points is being taken.
+- Enemy tech in the top bar stays visible for now.
+- The sandbox shows the fog of the player being controlled; the minimap shows your vision.
+
+### Win condition and pacing *(planned, G5)*
 
 - **Victory points:** each owned capture point earns victory points every second; the first player to the target wins. Destroying the enemy HQ also wins at once. Opponent disconnect for 30 seconds still forfeits.
 - **Target pacing:** 0:00–1:30 take your safe point and race Raiders to the side points; 1:30–4:00 choose between Tier 2, Overclock and more army; 4:00–8:00 fight over the centre and push with Siege.
 
-Until G4, the only win is destroying the enemy HQ (or a forfeit).
+Until G5, the only win is destroying the enemy HQ (or a forfeit).
 
 ### Map and economy (current)
 
@@ -277,7 +292,8 @@ Each milestone ends in something to playtest, tracked on GitHub as a milestone w
 | G1 · Combat foundation | Armour and tag bonuses, the four units as data, shape rendering, attack and hit effects, train hotkeys Q/W/E/R | Do the counters feel right and read clearly? |
 | G2 · Capture points | Point entity, capture system, point income, 5-point map, point status in the HUD | Is the map worth fighting over? |
 | G3 · Tech | `research` command, tiers, `requires` on units, Weapons/Armour upgrades, Overclock | Is the army/economy/tech choice real? |
-| G4 · Win and pacing | Victory points, match timer, balance pass | Do matches end in 6–9 minutes? |
+| G4 · Camera and fog of war | Zoom, middle-drag pan, minimap; server-filtered snapshots, fog rendering | Does scouting and vision matter? |
+| G5 · Win and pacing | Victory points, match timer, balance pass (after fog, since fog changes balance) | Do matches end in 6–9 minutes? |
 
 These numbers are starting points for playtesting, not balanced values. They live in `shared/data/` and are tuned there.
 
@@ -388,6 +404,7 @@ Record every change to a Core rule here, newest first, with the reason.
 
 | Date | Decision | Reason |
 | --- | --- | --- |
+| 2026-10-28 | New G4 · Camera and fog of war, before win and pacing (now G5). Camera zooms 0.5×–1.6× (out to the whole map fitting the window) with a minimap; map stays 2400 × 1000. Fog will be server-filtered snapshots, drawn as dimmed areas without a black unexplored layer | Owner's call. Zoom and a minimap let players manage the map in any browser window; fog makes scouting and vision matter. Fog changes balance (Siege outranges sight and needs a spotter), so the balance pass waits for it. Filtering on the server is the only cheat-proof fog |
 | 2026-10-28 | Tech (G3): Tier 1 trains Line, Raider and Ranged; Tier 2 unlocks Siege, level 2 upgrades and Overclock. Weapons/Armour are ±15% per level, two levels each. Overclock needs Tier 2. New `research` command; research runs per player inside the production step (tick order unchanged) | Owner's calls. The GDD planned Tier 1 as Line and Raider only, but nothing at Tier 1 would then beat Line, so the opening would be "mass Line"; adding Ranged keeps the counter loop from minute one. Percentage upgrades keep counters intact at every level. Overclock behind Tier 2 makes Tier 2 the gateway to both late army and late economy |
 | 2026-10-27 | Capture points (G2): points stay owned until neutralized; every point, including the safe one, can be captured; a contested point pauses; points pay on top of the HQ, which keeps 5 gold/s (was planned to drop to 3). New tick step "Capture" between deaths and win check | Owner's calls: ownership that persists gives Raiders a raiding job and makes territory matter; capturable safe points keep the army vs economy tension at home; a pause on contested points makes the fight decide it. The owner wants to test a high-gold game first, so points add to the HQ instead of replacing part of it |
 | 2026-10-27 | Game design: one currency split between economy, army and tech; capture-point income; four shared shape units with an armour/bonus-damage counter loop; tiers and research; victory points; matches under 10 minutes. Built in four milestones (G1–G4) | Design session with the owner. Shapes keep art cost at zero while the systems are proven; capture points avoid pathfinding; victory points stop turtling and keep matches short |
