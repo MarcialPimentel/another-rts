@@ -33,7 +33,10 @@ export interface EntityDefData {
    * damage multipliers against targets with a tag (e.g. `{ heavy: 2 }`). Armour applies after bonuses.
    */
   attack?: { damage: number; interval: number; range: number; bonus?: Record<string, number> };
-  /** Distance in px (edge to edge) at which idle units notice enemies. */
+  /**
+   * Distance in px (edge to edge) at which idle units notice enemies. Also how far this entity
+   * sees through fog of war; entities with no sight give no vision.
+   */
   sight?: number;
   /** Gold per second this entity gives its owner. */
   income?: number;

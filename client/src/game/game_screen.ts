@@ -3,10 +3,12 @@ import type { ViewState } from "../../../shared/view";
 import { Camera } from "./camera";
 import { Effects } from "./effects";
 import { Feedback } from "./feedback";
+import { FogLayer } from "./fog";
+import { visionCircles } from "../../../shared/sim/vision";
 import { Hud } from "./hud";
 import { Input, type FeedbackKind } from "./input";
 import { Minimap } from "./minimap";
-import { renderWorld } from "./render";
+import { drawRaidWarnings, renderWorld } from "./render";
 import type { Session } from "./session";
 
 export interface EndAction {
@@ -21,6 +23,8 @@ export interface GameScreenOptions {
 
 const HUD_TOP = 40;
 const HUD_BOTTOM = 96;
+/** Width of the soft edge of vision, in world pixels. */
+const FOG_FEATHER = 45;
 
 /** The in-match screen: canvas, camera, input, HUD and the end-of-match overlay. */
 export class GameScreen {
@@ -30,6 +34,8 @@ export class GameScreen {
   private readonly camera = new Camera(GAME);
   private readonly feedback = new Feedback();
   private readonly effects = new Effects();
+  /** Quarter-resolution mask: cheap, and the upscale softens the edges. */
+  private readonly fog = new FogLayer(0.25);
   private readonly input: Input;
   private readonly hud: Hud;
   private readonly minimap: Minimap;
@@ -133,10 +139,12 @@ export class GameScreen {
       now,
     });
     this.effects.draw(ctx, this.camera, this.session.colors, now);
+    if (view.status === "playing") this.drawFog(view);
+    drawRaidWarnings(ctx, view, this.camera, GAME, this.session.localPlayer, this.session.colors, now);
     this.feedback.draw(ctx, this.camera, now);
     this.canvas.style.cursor = this.input.attackMoveArmed ? "crosshair" : "default";
     this.hud.update(view);
-    this.minimap.draw(view, this.session.colors);
+    this.minimap.draw(view, this.session.colors, this.session.localPlayer, now);
 
     const alert = this.session.alert?.() ?? null;
     if (alert) {
@@ -153,6 +161,16 @@ export class GameScreen {
       this.ended = false;
       this.endOverlay.classList.add("hidden");
     }
+  }
+
+  /** Dims everything outside the local player's sight (the server already hid enemy units there). */
+  private drawFog(view: ViewState): void {
+    const scale = this.camera.scale;
+    const circles = visionCircles(view.entities, this.session.localPlayer, GAME).map((c) => {
+      const p = this.camera.toScreen(c.x, c.y);
+      return { x: p.x, y: p.y, r: c.r * scale };
+    });
+    this.fog.draw(this.ctx, window.innerWidth, window.innerHeight, circles, FOG_FEATHER * scale);
   }
 
   /** A status line under the result buttons (e.g. rematch status). */

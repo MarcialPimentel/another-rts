@@ -58,6 +58,15 @@ export interface PlayerState {
   researchProgress: number;
 }
 
+/** An entity that died recently, so clients can tell a death from leaving their sight. */
+export interface RecentDeath {
+  id: number;
+  owner: number;
+  x: number;
+  y: number;
+  tick: number;
+}
+
 export interface World {
   tick: number;
   /** Next entity id. Ids are never reused within a match. */
@@ -69,6 +78,8 @@ export interface World {
   /** Winning player id, or null for a draw or while playing. */
   winner: number | null;
   endReason: string | null;
+  /** Deaths in the last second (see deaths system), for drawing death bursts under fog of war. */
+  recentDeaths: RecentDeath[];
 }
 
 /** Adds an entity of `type` for `owner` at a position and returns it. */
@@ -113,6 +124,7 @@ export function createWorld(game: CompiledGame = GAME, playerCount = game.map.ba
     status: "playing",
     winner: null,
     endReason: null,
+    recentDeaths: [],
   };
   for (const point of game.map.points) spawnEntity(world, NEUTRAL, point.type, point.x, point.y, game);
   for (let p = 0; p < playerCount; p++) {

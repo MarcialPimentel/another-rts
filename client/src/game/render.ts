@@ -21,6 +21,16 @@ const UNIT_DRAW_SCALE = 1.3;
 /** Units never draw smaller than this radius in screen pixels, so shapes read when zoomed out. */
 const MIN_UNIT_RADIUS = 7;
 
+/** On-screen radius of a unit with collision radius `radius`. */
+export function unitRadius(radius: number, scale: number): number {
+  return Math.max(MIN_UNIT_RADIUS, radius * scale * UNIT_DRAW_SCALE);
+}
+
+/** True while an enemy is capturing (or neutralizing) a point `player` owns. */
+export function pointUnderAttack(e: ViewEntity, player: number): boolean {
+  return e.owner === player && !!e.capture && e.capture.by >= 0 && e.capture.by !== player && e.capture.progress > 0;
+}
+
 /** Draws the map and every entity as its shape (GDD Game layer: shapes first, flavour later). */
 export function renderWorld(
   ctx: CanvasRenderingContext2D,
@@ -130,12 +140,12 @@ function drawEntity(
   }
   const p = camera.toScreen(e.x, e.y);
   // Units draw a little larger than their collision radius so shapes read at a glance.
-  const r =
-    def.kind === "unit"
-      ? Math.max(MIN_UNIT_RADIUS, def.radius * camera.scale * UNIT_DRAW_SCALE)
-      : def.radius * camera.scale;
+  const r = def.kind === "unit" ? unitRadius(def.radius, camera.scale) : def.radius * camera.scale;
   const color = teamColor(e.owner, opts.colors);
   const selected = opts.selection.has(e.id);
+  ctx.save();
+  // Units fade in as they come into sight.
+  if (def.kind === "unit") ctx.globalAlpha = opts.effects.alpha(e.id, opts.now);
 
   if (selected) {
     ctx.strokeStyle = COLORS.selection;
@@ -196,6 +206,7 @@ function drawEntity(
     ctx.fillStyle = frac > 0.6 ? COLORS.hpGood : frac > 0.3 ? COLORS.hpMid : COLORS.hpLow;
     ctx.fillRect(p.x - w / 2, y, w * frac, 4);
   }
+  ctx.restore();
 }
 
 /**
@@ -261,6 +272,42 @@ function drawPoint(
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
   ctx.fillText(`+${goldPerSecond}`, p.x, p.y + d + 3);
+  ctx.restore();
+}
+
+/**
+ * Raid warnings, drawn above the fog so they stay bright: on each of your points the enemy is
+ * taking, the enemy's capture ring plus a red ring pulsing outward.
+ */
+export function drawRaidWarnings(
+  ctx: CanvasRenderingContext2D,
+  view: ViewState,
+  camera: Camera,
+  game: CompiledGame,
+  localPlayer: number,
+  colors: readonly number[],
+  now: number,
+): void {
+  ctx.save();
+  for (const e of view.entities) {
+    const def = game.defs[e.type];
+    if (def?.kind !== "point" || !pointUnderAttack(e, localPlayer)) continue;
+    const p = camera.toScreen(e.x, e.y);
+    const r = def.radius * camera.scale;
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = teamColor(e.capture!.by, colors).fill;
+    ctx.lineWidth = 5;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r, -Math.PI / 2, -Math.PI / 2 + e.capture!.progress * Math.PI * 2);
+    ctx.stroke();
+    const pulse = (now % 900) / 900;
+    ctx.globalAlpha = 1 - pulse;
+    ctx.strokeStyle = COLORS.attack;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(p.x, p.y, r + 6 + pulse * 26 * camera.scale, 0, Math.PI * 2);
+    ctx.stroke();
+  }
   ctx.restore();
 }
 

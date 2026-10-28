@@ -151,6 +151,10 @@ input {
   color: var(--gold);
   font-weight: 600;
 }
+.hud-points.alert {
+  color: #f87171;
+  font-weight: 600;
+}
 .hud-status {
   flex: 1;
   color: var(--muted);

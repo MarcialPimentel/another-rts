@@ -2,6 +2,7 @@ import { GAME } from "../../../shared/data";
 import type { Command, PlayerCommand } from "../../../shared/sim/commands";
 import { TICK_MS } from "../../../shared/sim/constants";
 import { step } from "../../../shared/sim/step";
+import { PlayerVision } from "../../../shared/sim/vision";
 import { createWorld, type World } from "../../../shared/sim/world";
 import { interpolateView, worldToView, type ViewState } from "../../../shared/view";
 import { DEFAULT_COLORS } from "../../../shared/lobby";
@@ -9,20 +10,22 @@ import type { Session } from "./session";
 
 /**
  * Offline sandbox: runs the real simulation in the browser at 20 ticks per second.
- * Commands still go through the same validate/apply path the server uses.
+ * Commands still go through the same validate/apply path the server uses, and the view goes
+ * through the same fog of war filter, for whichever player is being controlled.
  */
 export class LocalSession implements Session {
   localPlayer = 0;
   readonly colors = DEFAULT_COLORS;
   private world: World = createWorld(GAME);
   private queue: PlayerCommand[] = [];
+  private readonly visions = this.world.players.map((p) => new PlayerVision(p.id));
   private prev: ViewState;
   private current: ViewState;
   private lastStepAt = performance.now();
   private timer: number;
 
   constructor() {
-    this.prev = worldToView(this.world);
+    this.prev = this.seen();
     this.current = this.prev;
     this.timer = window.setInterval(() => this.advance(), TICK_MS / 2);
   }
@@ -47,10 +50,17 @@ export class LocalSession implements Session {
 
   switchPlayer(): void {
     this.localPlayer = (this.localPlayer + 1) % this.world.players.length;
+    this.prev = this.current = this.seen();
   }
 
   dispose(): void {
     window.clearInterval(this.timer);
+  }
+
+  /** The world as the controlled player sees it. Every player's vision runs, to keep its memory. */
+  private seen(): ViewState {
+    const views = this.visions.map((v) => v.apply(this.world, GAME));
+    return worldToView(views[this.localPlayer]!);
   }
 
   /** Runs as many fixed ticks as real time requires (catching up after tab throttling, capped). */
@@ -60,7 +70,7 @@ export class LocalSession implements Session {
     while (now - this.lastStepAt >= TICK_MS && steps < 10) {
       this.prev = this.current;
       step(this.world, this.queue.splice(0), GAME);
-      this.current = worldToView(this.world);
+      this.current = this.seen();
       this.lastStepAt += TICK_MS;
       steps++;
     }
