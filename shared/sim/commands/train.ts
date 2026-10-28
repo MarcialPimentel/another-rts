@@ -1,3 +1,4 @@
+import { canTrain } from "../tech";
 import { ownedProducer, unitCount } from "./helpers";
 import type { CommandHandler } from "./types";
 
@@ -11,7 +12,7 @@ export const train: CommandHandler<"train"> = {
     if (!unit || !def.produces.includes(cmd.unit)) return null;
     if (building.queue.length >= def.queueMax) return null;
     const state = world.players[player];
-    if (!state || state.gold < unit.cost) return null;
+    if (!state || state.gold < unit.cost || !canTrain(state, unit)) return null;
     if (unitCount(world, player, game) >= game.economy.unitCap) return null;
     return { type: "train", building: cmd.building, unit: cmd.unit };
   },

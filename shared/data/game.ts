@@ -9,6 +9,9 @@
  *   Siege ⬢ beats buildings (bonus vs structure) from outside their reach
  *
  * Economy: the HQ pays 5 gold/s; capture points pay on top (+2 each, centre +3).
+ *
+ * Tech (researched at the HQ, one at a time): Tier 2 unlocks Siege, the second level of Weapons
+ * and Armour, and Overclock. Weapons and Armour are ±15% per level for every unit.
  */
 import type { GameData } from "./types";
 
@@ -31,6 +34,7 @@ export const GAME_DATA: GameData = {
       armor: 3,
       income: 5,
       isHeadquarters: true,
+      researches: ["tier2", "weapons_1", "armour_1", "overclock", "weapons_2", "armour_2"],
     },
     {
       id: "barracks",
@@ -108,6 +112,7 @@ export const GAME_DATA: GameData = {
       speed: 50,
       attack: { damage: 36, interval: 3.0, range: 260, bonus: { structure: 3 } },
       sight: 300,
+      requires: ["tier2"],
     },
     {
       id: "point",
@@ -128,6 +133,61 @@ export const GAME_DATA: GameData = {
       hp: 1,
       income: 3,
       captureTime: 8,
+    },
+  ],
+  research: [
+    {
+      id: "tier2",
+      name: "Tier 2",
+      description: "Unlocks Siege, level 2 upgrades and Overclock.",
+      cost: 250,
+      time: 30,
+      effect: {},
+    },
+    {
+      id: "weapons_1",
+      name: "Weapons 1",
+      description: "All your units deal 15% more damage.",
+      cost: 150,
+      time: 20,
+      effect: { damage: 0.15 },
+    },
+    {
+      id: "armour_1",
+      name: "Armour 1",
+      description: "All your units take 15% less damage.",
+      cost: 150,
+      time: 20,
+      effect: { armour: 0.15 },
+    },
+    {
+      id: "weapons_2",
+      name: "Weapons 2",
+      description: "Another 15% more damage (30% in total).",
+      cost: 250,
+      time: 25,
+      requires: ["weapons_1", "tier2"],
+      follows: "weapons_1",
+      effect: { damage: 0.15 },
+    },
+    {
+      id: "armour_2",
+      name: "Armour 2",
+      description: "Another 15% less damage taken (30% in total).",
+      cost: 250,
+      time: 25,
+      requires: ["armour_1", "tier2"],
+      follows: "armour_1",
+      effect: { armour: 0.15 },
+    },
+    {
+      id: "overclock",
+      name: "Overclock",
+      description: "Each capture point you own pays +1 gold per second.",
+      cost: 150,
+      time: 25,
+      requires: ["tier2"],
+      effect: { pointIncome: 1 },
     },
   ],
   map: {

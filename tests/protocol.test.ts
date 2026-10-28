@@ -14,7 +14,7 @@ describe("snapshot encoding", () => {
     spawnEntity(w, 1, "line", 1000.4, 500.6);
     for (let i = 0; i < 30; i++) step(w);
 
-    const decoded = decodeSnapshot(JSON.parse(JSON.stringify(encodeSnapshot(w, GAME, 7))), GAME.typeIds);
+    const decoded = decodeSnapshot(JSON.parse(JSON.stringify(encodeSnapshot(w, GAME, 7))), GAME.typeIds, GAME.researchIds);
     const direct = worldToView(w);
     expect(decoded.tick).toBe(direct.tick);
     expect(decoded.players).toEqual(direct.players);
@@ -38,7 +38,7 @@ describe("snapshot encoding", () => {
     applyCommand(w, 0, { type: "attack", units: [a.id], target: b.id });
     for (let i = 0; i < 5; i++) step(w);
     expect(a.lastAttackTick).toBeGreaterThanOrEqual(0);
-    const v = decodeSnapshot(JSON.parse(JSON.stringify(encodeSnapshot(w, GAME))), GAME.typeIds);
+    const v = decodeSnapshot(JSON.parse(JSON.stringify(encodeSnapshot(w, GAME))), GAME.typeIds, GAME.researchIds);
     const shooter = v.entities.find((e) => e.id === a.id)!;
     expect(shooter.target).toBe(b.id);
     expect(shooter.lastAttackTick).toBe(a.lastAttackTick);
@@ -55,7 +55,7 @@ describe("snapshot encoding", () => {
     w.endReason = "forfeit";
     const s = encodeSnapshot(w, GAME, 42);
     expect(s.a).toBe(42);
-    const v = decodeSnapshot(s, GAME.typeIds);
+    const v = decodeSnapshot(s, GAME.typeIds, GAME.researchIds);
     expect(v.status).toBe("ended");
     expect(v.winner).toBe(1);
     expect(v.endReason).toBe("forfeit");

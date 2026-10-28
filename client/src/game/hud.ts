@@ -1,6 +1,9 @@
 import type { CompiledGame, Shape } from "../../../shared/data";
 import type { ViewState } from "../../../shared/view";
+import { canTrain, hasResearched, techModifiers } from "../../../shared/sim/tech";
+import type { ViewPlayer } from "../../../shared/view";
 import { TRAIN_KEYS, type Input } from "./input";
+import { researchSlots } from "./research_slots";
 import type { Session } from "./session";
 
 /**
@@ -13,6 +16,7 @@ export class Hud {
   private readonly gold: HTMLSpanElement;
   private readonly units: HTMLSpanElement;
   private readonly points: HTMLSpanElement;
+  private readonly tech: HTMLSpanElement;
   private readonly status: HTMLSpanElement;
   private readonly panel: HTMLDivElement;
   private lastPanel = "";
@@ -27,10 +31,11 @@ export class Hud {
     this.gold = el("span", "hud-gold");
     this.units = el("span", "hud-units");
     this.points = el("span", "hud-points");
+    this.tech = el("span", "hud-tech");
     this.status = el("span", "hud-status");
     const build = el("span", "hud-build");
     build.textContent = `build ${__BUILD_ID__}`;
-    this.top.append(this.gold, this.units, this.points, this.status, build);
+    this.top.append(this.gold, this.units, this.points, this.tech, this.status, build);
 
     this.bottom = el("div", "hud-bottom");
     this.panel = el("div", "hud-panel");
@@ -42,8 +47,13 @@ export class Hud {
   update(view: ViewState): void {
     const me = view.players[this.session.localPlayer];
     const mine = view.entities.filter((e) => e.owner === this.session.localPlayer);
-    // Income shown per second: the HQ plus every point you own.
-    const income = mine.reduce((sum, e) => sum + (this.game.defs[e.type]?.incomePerTick ?? 0), 0) * 20;
+    // Income shown per second: the HQ plus every point you own (with Overclock).
+    const overclock = techModifiers(me, this.game).pointIncome;
+    const income = mine.reduce((sum, e) => {
+      const def = this.game.defs[e.type];
+      if (!def || def.incomePerTick <= 0) return sum;
+      return sum + def.incomePerTick * 20 + (def.kind === "point" ? overclock : 0);
+    }, 0);
     this.gold.textContent = `Gold ${me ? me.gold : 0} (+${Math.round(income)}/s)`;
     const allPoints = view.entities.filter((e) => this.game.defs[e.type]?.kind === "point");
     const owned = allPoints.filter((e) => e.owner === this.session.localPlayer).length;
@@ -53,6 +63,9 @@ export class Hud {
       mine.filter((e) => this.game.defs[e.type]?.kind === "unit").length +
       mine.reduce((n, e) => n + e.queue.length, 0);
     this.units.textContent = `Units ${unitCount}/${this.game.economy.unitCap}`;
+    // Both players' tech is public, so you can see what the enemy is building towards.
+    const enemy = view.players.find((p) => p.id !== this.session.localPlayer);
+    this.tech.textContent = `Tech ${me ? this.techSummary(me) : "-"} · enemy ${enemy ? this.techSummary(enemy) : "-"}`;
     this.status.textContent = this.session.status();
     this.renderPanel(view);
   }
@@ -61,7 +74,7 @@ export class Hud {
     const selected = this.input.selectedEntities();
     let html: string;
     if (selected.length === 0) {
-      html = `<div class="hint">Drag to select units · Right-click to move or attack · A = attack-move · S = stop · Select the Barracks and press Q/W/E/R to train · Stand on ◆ points to capture them for gold · Arrows or screen edge to scroll</div>`;
+      html = `<div class="hint">Drag to select units · Right-click to move or attack · A = attack-move · S = stop · Select the Barracks to train (Q/W/E/R) or the HQ to research · Stand on ◆ points to capture them for gold · Arrows or screen edge to scroll</div>`;
     } else if (selected.length === 1 && this.game.defs[selected[0]!.type]?.kind === "building") {
       const b = selected[0]!;
       const def = this.game.defs[b.type]!;
@@ -85,14 +98,21 @@ export class Hud {
         const gold = view.players[this.session.localPlayer]?.gold ?? 0;
         const full = b.queue.length + pending >= def.queueMax;
         rows.push(`<div class="queue" title="Right-click the ground to set the rally point">${slots.join("")}</div>`);
+        const me = view.players[this.session.localPlayer];
         const buttons = def.produces.map((id, i) => {
           const unit = this.game.defs[id]!;
           const key = (TRAIN_KEYS[i] ?? "").toUpperCase();
-          const disabled = gold < unit.cost || full || !key ? "disabled" : "";
-          const tip = `${unit.name}: ${unit.description} (HP ${unit.hp}, ${unit.cost} gold)`;
-          return `<button class="train" data-action="train" data-index="${i}" title="${tip}" ${disabled}><b>${SHAPE_GLYPH[unit.shape]}</b> ${unit.name} <small>${unit.cost}g · ${key}</small></button>`;
+          const unlocked = me ? canTrain(me, unit) : false;
+          const disabled = gold < unit.cost || full || !key || !unlocked ? "disabled" : "";
+          const needs = unlocked ? "" : ` · needs ${this.researchNames(unit.requires)}`;
+          const tip = `${unit.name}: ${unit.description} (HP ${unit.hp}, ${unit.cost} gold)${needs}`;
+          const small = unlocked ? `${unit.cost}g · ${key}` : `needs ${this.researchNames(unit.requires)}`;
+          return `<button class="train" data-action="train" data-index="${i}" title="${tip}" ${disabled}><b>${SHAPE_GLYPH[unit.shape]}</b> ${unit.name} <small>${small}</small></button>`;
         });
         rows.push(`<div class="train-row">${buttons.join("")}</div>`);
+      } else if (def.researches.length && own) {
+        const me = view.players[this.session.localPlayer];
+        rows.push(this.researchRow(researchSlots(def, me?.researched ?? [], this.game), me));
       } else if (def.incomePerTick > 0) {
         rows.push(`<div class="hint">+${Math.round(def.incomePerTick * 20)} gold per second</div>`);
       }
@@ -121,12 +141,52 @@ export class Hud {
     }
   }
 
+  /** Research buttons at the HQ: done, in progress, locked, or ready to buy. */
+  private researchRow(ids: string[], me: ViewPlayer | undefined): string {
+    const gold = me?.gold ?? 0;
+    const buttons = ids.map((id, i) => {
+      const r = this.game.research[id]!;
+      const key = (TRAIN_KEYS[i] ?? "").toUpperCase();
+      const done = me?.researched.includes(id) ?? false;
+      const current = me?.researching?.id === id ? me.researching : null;
+      const unlocked = me ? hasResearched(me, r.requires) : false;
+      let small: string;
+      if (done) small = "done";
+      else if (current) small = `${Math.round(current.progress * 100)}%`;
+      else if (!unlocked)
+        small = `needs ${this.researchNames(r.requires.filter((q) => !me?.researched.includes(q)))}`;
+      else small = `${r.cost}g · ${key}`;
+      const busy = me?.researching != null;
+      const disabled = done || current || busy || !unlocked || gold < r.cost || !key ? "disabled" : "";
+      const cls = done ? "train done" : current ? "train active" : "train";
+      const tip = `${r.name}: ${r.description} (${r.cost} gold, ${Math.round(r.ticks / 20)} s)`;
+      return `<button class="${cls}" data-action="research" data-index="${i}" title="${tip}" ${disabled}>${r.name} <small>${small}</small></button>`;
+    });
+    return `<div class="train-row">${buttons.join("")}</div>`;
+  }
+
+  private researchNames(ids: readonly string[]): string {
+    return ids.map((id) => this.game.research[id]?.name ?? id).join(" + ");
+  }
+
+  /** Short tech summary, e.g. "T2 W1 A0 OC". */
+  private techSummary(p: ViewPlayer): string {
+    const levels = (key: "damage" | "armour") =>
+      p.researched.filter((id) => (this.game.research[id]?.effect[key] ?? 0) > 0).length;
+    const tier = p.researched.includes("tier2") ? 2 : 1;
+    const oc = p.researched.some((id) => (this.game.research[id]?.effect.pointIncome ?? 0) > 0) ? " OC" : "";
+    return `T${tier} W${levels("damage")} A${levels("armour")}${oc}`;
+  }
+
   private onClick(e: MouseEvent): void {
     const button = (e.target as HTMLElement).closest("button");
     if (!button) return;
     switch (button.dataset.action) {
       case "train":
         this.input.train(Number(button.dataset.index ?? 0));
+        break;
+      case "research":
+        this.input.research(Number(button.dataset.index ?? 0));
         break;
       case "stop":
         this.input.stop();

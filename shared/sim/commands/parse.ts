@@ -29,6 +29,9 @@ export function parseCommand(raw: unknown): Command | null {
     case "set_rally":
       if (!isId(c.building) || !isNum(c.x) || !isNum(c.y)) return null;
       return { type: "set_rally", building: c.building, x: c.x, y: c.y };
+    case "research":
+      if (!isId(c.building) || typeof c.research !== "string" || c.research.length > 64) return null;
+      return { type: "research", building: c.building, research: c.research };
     default:
       return null;
   }

@@ -26,6 +26,10 @@ export interface ViewPlayer {
   id: number;
   gold: number;
   defeated: boolean;
+  /** Finished research ids. */
+  researched: string[];
+  /** Research in progress, with progress 0..1, or null. */
+  researching: { id: string; progress: number } | null;
 }
 
 /** A drawable picture of the world at one tick. Built from the World locally or from a snapshot. */
@@ -41,7 +45,15 @@ export interface ViewState {
 export function worldToView(world: World, game: CompiledGame = GAME): ViewState {
   return {
     tick: world.tick,
-    players: world.players.map((p) => ({ id: p.id, gold: Math.floor(p.gold), defeated: p.defeated })),
+    players: world.players.map((p) => ({
+      id: p.id,
+      gold: Math.floor(p.gold),
+      defeated: p.defeated,
+      researched: [...p.researched],
+      researching: p.researching
+        ? { id: p.researching, progress: Math.min(1, p.researchProgress / game.research[p.researching]!.ticks) }
+        : null,
+    })),
     entities: Object.values(world.entities).map((e) => {
       const def = game.defs[e.type]!;
       const next = e.queue[0];

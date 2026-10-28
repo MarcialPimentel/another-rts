@@ -75,6 +75,11 @@ export interface EncodedSnapshot {
   g: number[];
   /** Defeated flags per player (1 = defeated). */
   d: number[];
+  /**
+   * Research per player: [finished research indexes, index in progress or -1, progress 0-100].
+   * Indexes point into the game's research list, like type indexes for entities.
+   */
+  rs: [number[], number, number][];
   /** Last command `seq` from the recipient that the simulation has applied. */
   a: number;
   e: EncodedEntity[];
@@ -87,6 +92,7 @@ export interface EncodedSnapshot {
 /** Encodes the world once per tick; `ack` is filled in per recipient. */
 export function encodeSnapshot(world: World, game: CompiledGame, ack = 0): EncodedSnapshot {
   const typeIndex = new Map(game.typeIds.map((id, i) => [id, i]));
+  const researchIndex = new Map(game.researchIds.map((id, i) => [id, i]));
   const e: EncodedEntity[] = [];
   for (const ent of Object.values(world.entities)) {
     const def = game.defs[ent.type]!;
@@ -131,6 +137,14 @@ export function encodeSnapshot(world: World, game: CompiledGame, ack = 0): Encod
     k: world.tick,
     g: world.players.map((p) => Math.floor(p.gold)),
     d: world.players.map((p) => (p.defeated ? 1 : 0)),
+    rs: world.players.map((p) => {
+      const current = p.researching ? game.research[p.researching]! : null;
+      return [
+        p.researched.map((id) => researchIndex.get(id)!),
+        current ? researchIndex.get(current.id)! : -1,
+        current ? Math.min(100, Math.floor((p.researchProgress / current.ticks) * 100)) : 0,
+      ];
+    }),
     a: ack,
     e,
     st: world.status === "ended" ? 1 : 0,
@@ -140,10 +154,19 @@ export function encodeSnapshot(world: World, game: CompiledGame, ack = 0): Encod
 }
 
 /** Turns a snapshot back into something the client can draw. */
-export function decodeSnapshot(s: EncodedSnapshot, typeIds: string[]): ViewState {
+export function decodeSnapshot(s: EncodedSnapshot, typeIds: string[], researchIds: string[]): ViewState {
   return {
     tick: s.k,
-    players: s.g.map((gold, id) => ({ id, gold, defeated: s.d[id] === 1 })),
+    players: s.g.map((gold, id) => {
+      const [done, current, pct] = s.rs[id] ?? [[], -1, 0];
+      return {
+        id,
+        gold,
+        defeated: s.d[id] === 1,
+        researched: done.map((i) => researchIds[i] ?? "unknown"),
+        researching: current >= 0 ? { id: researchIds[current] ?? "unknown", progress: pct / 100 } : null,
+      };
+    }),
     entities: s.e.map((raw): ViewEntity => {
       const [id, t, owner, x, y, hp, attack] = raw;
       const prod = raw.length === 8 ? raw[7] : null;

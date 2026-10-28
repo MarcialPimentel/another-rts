@@ -1,3 +1,4 @@
+import { GAME } from "../../../shared/data";
 import { decodeSnapshot, type ServerMessage } from "../../../shared/protocol";
 import type { Command } from "../../../shared/sim/commands";
 import type { ViewState } from "../../../shared/view";
@@ -40,7 +41,8 @@ export class OnlineSession implements Session {
   handle(message: ServerMessage): void {
     switch (message.t) {
       case "snapshot": {
-        const view = decodeSnapshot(message.s, this.typeIds);
+        // Client and server run the same build (checked on connect), so research ids match.
+        const view = decodeSnapshot(message.s, this.typeIds, GAME.researchIds);
         this.buffer.push(view, performance.now());
         this.ack = Math.max(this.ack, message.s.a);
         while (this.sentTrains.length && this.sentTrains[0]!.seq <= this.ack) this.sentTrains.shift();

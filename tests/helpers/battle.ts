@@ -43,8 +43,17 @@ function spawnArmy(w: World, owner: number, type: string, budget: number, x: num
   return ids;
 }
 
-export function battle(a: string, b: string, budget = 600, game: CompiledGame = GAME): BattleResult {
+/** `research` gives each side finished research before the fight, e.g. [["weapons_1"], []]. */
+export function battle(
+  a: string,
+  b: string,
+  budget = 600,
+  game: CompiledGame = GAME,
+  research: [string[], string[]] = [[], []],
+): BattleResult {
   const w = arena(game);
+  w.players[0]!.researched = [...research[0]];
+  w.players[1]!.researched = [...research[1]];
   const left = spawnArmy(w, 0, a, budget, 900, game);
   const right = spawnArmy(w, 1, b, budget, 1500, game);
   applyCommand(w, 0, { type: "attack_move", units: left, x: 1900, y: 500 }, game);

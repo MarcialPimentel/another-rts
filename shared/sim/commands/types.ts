@@ -14,7 +14,8 @@ export type Command =
   | { type: "attack_move"; units: number[]; x: number; y: number }
   | { type: "stop"; units: number[] }
   | { type: "train"; building: number; unit: string }
-  | { type: "set_rally"; building: number; x: number; y: number };
+  | { type: "set_rally"; building: number; x: number; y: number }
+  | { type: "research"; building: number; research: string };
 
 export type CommandType = Command["type"];
 export type CommandOf<T extends CommandType> = Extract<Command, { type: T }>;

@@ -56,6 +56,18 @@ describe("game data", () => {
     expect(() => compileGame(bad)).toThrow(/isn't a point/);
   });
 
+  it("rejects a requirement on research that doesn't exist", () => {
+    const bad = structuredClone(GAME_DATA);
+    bad.research[0]!.requires = ["time_travel"];
+    expect(() => compileGame(bad)).toThrow(/unknown research/);
+  });
+
+  it("converts research times to ticks", () => {
+    expect(GAME.research["tier2"]!.ticks).toBe(600); // 30 s
+    expect(GAME.research["weapons_1"]!.effect).toEqual({ damage: 0.15, armour: 0, pointIncome: 0 });
+    expect(GAME.defs["siege"]!.requires).toEqual(["tier2"]);
+  });
+
   it("rejects a building that produces an unknown type", () => {
     const bad = structuredClone(GAME_DATA);
     bad.defs[1]!.produces = ["dragon"];

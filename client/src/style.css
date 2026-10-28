@@ -224,6 +224,12 @@ button.train {
 button.train b {
   font-size: 15px;
 }
+button.train.done {
+  opacity: 0.55;
+}
+button.train.active {
+  border-color: var(--gold);
+}
 button.train small {
   color: var(--muted);
   margin-left: 2px;
