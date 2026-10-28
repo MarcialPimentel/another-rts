@@ -1,5 +1,6 @@
 import { hitDamage } from "../damage";
 import { edgeDistance } from "../geometry";
+import { ownerTech } from "../tech";
 import type { System } from "../step";
 
 /**
@@ -16,7 +17,12 @@ export const combat: System = (world, game) => {
     const target = world.entities[e.target];
     if (!target || target.owner === e.owner) continue;
     if (edgeDistance(e, target, game) > attack.range) continue;
-    target.hp -= hitDamage(def, game.defs[target.type]!);
+    target.hp -= hitDamage(
+      def,
+      game.defs[target.type]!,
+      ownerTech(world, e.owner, game),
+      ownerTech(world, target.owner, game),
+    );
     e.cooldown = attack.intervalTicks;
     e.lastAttackTick = world.tick;
   }

@@ -2,6 +2,7 @@ import type { CompiledGame } from "../../../shared/data";
 import type { Command } from "../../../shared/sim/commands";
 import type { ViewEntity, ViewState } from "../../../shared/view";
 import type { Camera } from "./camera";
+import { researchSlots } from "./research_slots";
 import type { Session } from "./session";
 
 export type FeedbackKind = "move" | "attack" | "rally" | "train" | "stop";
@@ -90,6 +91,17 @@ export class Input {
     for (const b of this.selectedProducers()) {
       const unit = this.game.defs[b.type]!.produces[index];
       if (unit) this.issue({ type: "train", building: b.id, unit }, "train", null);
+    }
+  }
+
+  /** Starts the research in the `index`-th research button of each selected own building (the HQ). */
+  research(index: number): void {
+    const researched = this.latest?.players[this.session.localPlayer]?.researched ?? [];
+    for (const b of this.selectedEntities()) {
+      const def = this.game.defs[b.type];
+      if (b.owner !== this.session.localPlayer || !def) continue;
+      const id = researchSlots(def, researched, this.game)[index];
+      if (id) this.issue({ type: "research", building: b.id, research: id }, "train", null);
     }
   }
 
@@ -241,6 +253,7 @@ export class Input {
       case "e":
       case "r":
         this.train(TRAIN_KEYS.indexOf(key));
+        this.research(TRAIN_KEYS.indexOf(key));
         break;
       case "escape":
         if (this.attackMoveArmed) this.attackMoveArmed = false;

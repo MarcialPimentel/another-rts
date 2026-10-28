@@ -3,10 +3,20 @@ import type { System } from "../step";
 import { spawnEntity } from "../world";
 
 /**
- * Advances production queues. A finished unit appears at the building's edge facing its rally
- * point and walks there.
+ * Advances production queues and research. A finished unit appears at the building's edge facing
+ * its rally point and walks there. Research belongs to the player and finishes into their list.
  */
 export const production: System = (world, game) => {
+  for (const player of world.players) {
+    if (player.researching === null || player.defeated) continue;
+    const r = game.research[player.researching]!;
+    player.researchProgress++;
+    if (player.researchProgress < r.ticks) continue;
+    player.researched.push(r.id);
+    player.researching = null;
+    player.researchProgress = 0;
+  }
+
   for (const building of Object.values(world.entities)) {
     const next = building.queue[0];
     if (next === undefined) continue;

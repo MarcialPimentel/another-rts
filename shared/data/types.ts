@@ -37,6 +37,10 @@ export interface EntityDefData {
   sight?: number;
   /** Gold per second this entity gives its owner. */
   income?: number;
+  /** Units only: research ids the owner must have finished before training this unit. */
+  requires?: string[];
+  /** Buildings only: research ids this building can research (one at a time per player). */
+  researches?: string[];
   /** Unit ids this building can train, and how many can queue. */
   produces?: string[];
   queueMax?: number;
@@ -49,6 +53,50 @@ export interface EntityDefData {
 }
 
 export type EntityKind = "unit" | "building" | "point";
+
+/**
+ * One research (an upgrade bought at the HQ). Each level of an upgrade is its own research, so
+ * "Weapons 2" requires "weapons_1". Effects add up across everything a player has researched.
+ */
+export interface ResearchData {
+  id: string;
+  name: string;
+  /** One line for players, shown in the HUD. */
+  description: string;
+  /** Gold, paid when research starts. */
+  cost: number;
+  /** Seconds to research. */
+  time: number;
+  /** Research ids that must be finished first. */
+  requires?: string[];
+  /**
+   * The previous level of the same upgrade (e.g. Weapons 2 follows "weapons_1"). The HUD shows
+   * one button per upgrade, which moves on to the next level once the previous one is done.
+   */
+  follows?: string;
+  effect: ResearchEffect;
+}
+
+export interface ResearchEffect {
+  /** Extra damage dealt by all your units, as a fraction (0.15 = +15%). */
+  damage?: number;
+  /** Less damage taken by all your units, as a fraction (0.15 = 15% less). */
+  armour?: number;
+  /** Extra gold per second from each capture point you own. */
+  pointIncome?: number;
+}
+
+/** A research after unit conversion. */
+export interface Research {
+  id: string;
+  name: string;
+  description: string;
+  cost: number;
+  ticks: number;
+  requires: string[];
+  follows: string | null;
+  effect: Required<ResearchEffect>;
+}
 
 export type Shape = "circle" | "square" | "triangle" | "hexagon";
 
@@ -73,6 +121,8 @@ export interface EntityDef {
   produces: string[];
   queueMax: number;
   isHeadquarters: boolean;
+  requires: string[];
+  researches: string[];
   /** Ticks for one unit to capture this point; 0 for anything that isn't a point. */
   captureTicks: number;
   captureWeight: number;
@@ -103,6 +153,7 @@ export interface EconomyData {
 
 export interface GameData {
   defs: EntityDefData[];
+  research: ResearchData[];
   map: MapData;
   economy: EconomyData;
 }

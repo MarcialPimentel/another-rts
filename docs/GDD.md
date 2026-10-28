@@ -105,7 +105,7 @@ The simulation is a plain state object advanced one tick at a time by a fixed se
 
 ## Command protocol *(Core)*
 
-Six commands cover the PoC; every one is validated by the server and silently dropped if invalid.
+Seven commands cover the game so far; every one is validated by the server and silently dropped if invalid.
 
 Each command carries `type`, a client-side sequence number `seq` (so the client can match acknowledgments), and its arguments. The server stamps the sending player's ID itself; a `player_id` sent by a client is ignored.
 
@@ -117,6 +117,7 @@ Each command carries `type`, a client-side sequence number `seq` (so the client 
 | `stop` | unit IDs | Units belong to sender |
 | `train` | building ID, unit type ID | Building belongs to sender and can produce that type; sender can afford it; queue not full; unit cap not reached |
 | `set_rally` | building ID, position | Building belongs to sender and is a producer |
+| `research` | building ID, research ID | Building belongs to sender and offers it; sender isn't researching, doesn't have it yet, has its requirements and can afford it |
 
 Rules:
 
@@ -153,7 +154,7 @@ Clients talk to the server over secure WebSockets; commands go up, full-state sn
 | Server → client | `pong` | Latency reply |
 | Server → client | `room_closed` | The room was cleaned up |
 
-**Snapshots.** The PoC sends the full state every tick (20 Hz), encoded compactly: each entity is a short array of rounded numbers, so a 60-unit battle is under 3 KB, and WebSocket compression shrinks it further. This matters on free hosting with a monthly bandwidth allowance. Delta compression is an extension point for when unit counts grow.
+**Snapshots.** The server sends the full state every tick (20 Hz), including each player's research, encoded compactly: each entity is a short array of rounded numbers, so a 60-unit battle is under 3 KB, and WebSocket compression shrinks it further. This matters on free hosting with a monthly bandwidth allowance. Delta compression is an extension point for when unit counts grow.
 
 **Interpolation.** Clients render about 100 ms behind the newest snapshot and interpolate positions between the two snapshots around that time. This hides jitter at the cost of a small, constant delay.
 
@@ -168,6 +169,7 @@ The client must feel instant even though nothing happens until the server confir
 - Left-click selects a unit or building; drag selects a box of own units; Shift adds to selection.
 - Right-click on ground: `move`. Right-click on an enemy: `attack`. `A` then left-click: `attack_move`. `S`: `stop`.
 - With a Barracks selected: one Train button per unit it can make (hotkeys `Q`, `W`, `E`, `R` in the order the data lists them) sends `train`; right-click on ground sends `set_rally`.
+- With the HQ selected: one Research button per upgrade (hotkeys `Q`, `W`, `E`, `R`) sends `research`.
 - Camera pans with edge scrolling and arrow keys; the PoC map fits about two screens wide.
 
 **Instant feedback (MUST).** On any command, immediately show a marker at the click point (green for move, red for attack) and play a short click sound, before the server responds. Training shows the queued unit at once, greyed out until the snapshot confirms it.
@@ -193,11 +195,11 @@ Two commanders fight over a small map with shape-based armies. Every coin goes t
 3. **Systematic and modular.** Each mechanic is one system (or one data field) with its own tests and its own place in the tick order, added one milestone at a time. New units should be data, not code.
 4. **Short matches.** Target 6–9 minutes, hard ceiling 10. Prefer mechanics that force a result (map control, victory points) over ones that reward turtling.
 
-**Status (2026-10-27):** G1 and G2 are built; G2 is ready to playtest. Sections below mark what is **built** and what is **planned**.
+**Status (2026-10-28):** G1–G3 are built; G3 is ready to playtest. Sections below mark what is **built** and what is **planned**.
 
 ### Army: four shapes and a counter loop *(built in G1)*
 
-Both players share one roster, trained at the Barracks. Counters come from two data fields, not special code: **armour** (flat reduction per hit, minimum 1 damage) and **bonus damage against tags** (`light`, `heavy`, `structure`). Fast, weak hits lose to armour; big hits ignore it.
+Both players share one roster, trained at the Barracks. Siege needs Tier 2 (see Tech). Counters come from two data fields, not special code: **armour** (flat reduction per hit, minimum 1 damage) and **bonus damage against tags** (`light`, `heavy`, `structure`). Fast, weak hits lose to armour; big hits ignore it.
 
 | Shape | Unit | Role | Strong vs | Weak vs |
 | --- | --- | --- | --- | --- |
@@ -236,13 +238,24 @@ The HQ pays a steady 5 gold/s and **capture points** pay on top of it, so holdin
 - **Readability:** neutral points are grey dashed circles; owned points are tinted solid in the owner's colour. A ring fills in the capturing player's colour. Each point shows its income (+2, +3). The HUD shows gold per second and points held by each side.
 - **Economy investment (G3):** *Overclock*, researched at the HQ, adds income per owned point. Strong when you hold the map, wasted when you don't.
 
-### Tech: tiers and upgrades *(planned, G3)*
+### Tech: tiers and upgrades *(built in G3)*
 
-- **Tier 2** is an upgrade at the HQ (~200 gold, ~30 s). Tier 1 trains Line and Raider; Tier 2 unlocks Ranged and Siege. Unit definitions get a `requires` field.
-- **Research** at the HQ: Weapons +1 (damage), Armour +1, and Overclock. Each is a `research` command, a research queue, and per-player upgrade levels that the combat and income systems read.
-- **No building placement yet.** Tech lives in the pre-placed buildings.
+Tech is bought at the HQ with the same gold as army and economy. Research is per player, runs one at a time, is paid when it starts, and can't be cancelled. Both players can see each other's tech in the top bar (e.g. `T2 W1 A0 OC`).
 
-Until G3 lands, all four units are trainable from the start so the counters can be playtested.
+| Research | Cost | Time (s) | Needs | Effect |
+| --- | --- | --- | --- | --- |
+| Tier 2 | 250 | 30 | — | Unlocks Siege, level 2 upgrades and Overclock |
+| Weapons 1 | 150 | 20 | — | All your units deal +15% damage |
+| Armour 1 | 150 | 20 | — | All your units take 15% less damage |
+| Weapons 2 | 250 | 25 | Weapons 1, Tier 2 | Another +15% (30% total) |
+| Armour 2 | 250 | 25 | Armour 1, Tier 2 | Another 15% less (30% total) |
+| Overclock | 150 | 25 | Tier 2 | Each capture point you own pays +1 gold/s |
+
+- **Tier 1** trains Line, Raider and Ranged, a complete counter loop from the first minute. **Tier 2** unlocks Siege, the unit that ends games. Units name their requirements in a `requires` field.
+- **Upgrades are percentages**, the same for every unit, so the counter loop holds at every upgrade level (tested). Weapons multiplies damage before flat armour; Armour multiplies the damage that gets through.
+- **Research is data** (`research` in `shared/data/game.ts`): cost, time, requirements, the level it `follows`, and its effect (damage, armour, point income). Effects from everything a player has researched add up.
+- **HQ panel:** one button per upgrade (Tier 2, Weapons, Armour, Overclock on Q/W/E/R). A button moves on to the next level once the previous one is done, and locked buttons say what they need. The Barracks shows locked units as "needs Tier 2".
+- **No building placement yet.** Tech lives in the pre-placed HQ.
 
 ### Win condition and pacing *(planned, G4)*
 
@@ -375,6 +388,7 @@ Record every change to a Core rule here, newest first, with the reason.
 
 | Date | Decision | Reason |
 | --- | --- | --- |
+| 2026-10-28 | Tech (G3): Tier 1 trains Line, Raider and Ranged; Tier 2 unlocks Siege, level 2 upgrades and Overclock. Weapons/Armour are ±15% per level, two levels each. Overclock needs Tier 2. New `research` command; research runs per player inside the production step (tick order unchanged) | Owner's calls. The GDD planned Tier 1 as Line and Raider only, but nothing at Tier 1 would then beat Line, so the opening would be "mass Line"; adding Ranged keeps the counter loop from minute one. Percentage upgrades keep counters intact at every level. Overclock behind Tier 2 makes Tier 2 the gateway to both late army and late economy |
 | 2026-10-27 | Capture points (G2): points stay owned until neutralized; every point, including the safe one, can be captured; a contested point pauses; points pay on top of the HQ, which keeps 5 gold/s (was planned to drop to 3). New tick step "Capture" between deaths and win check | Owner's calls: ownership that persists gives Raiders a raiding job and makes territory matter; capturable safe points keep the army vs economy tension at home; a pause on contested points makes the fight decide it. The owner wants to test a high-gold game first, so points add to the HQ instead of replacing part of it |
 | 2026-10-27 | Game design: one currency split between economy, army and tech; capture-point income; four shared shape units with an armour/bonus-damage counter loop; tiers and research; victory points; matches under 10 minutes. Built in four milestones (G1–G4) | Design session with the owner. Shapes keep art cost at zero while the systems are proven; capture points avoid pathfinding; victory points stop turtling and keep matches short |
 | 2026-10-27 | Another RTS created from rts-template v1.0 with shared history (`upstream` remote). It takes over the marz.gg/games/rts page and the SiteGround secrets; its own Render services are `another-rts-server` and `another-rts-client`, and the template's live deploys are retired | The template isn't played on its own, so the game reuses its page and settings. Only one repo deploys to each place, so template pushes can't overwrite the game |

@@ -3,6 +3,7 @@ import type { World } from "../world";
 import { attack } from "./attack";
 import { attackMove } from "./attack_move";
 import { move } from "./move";
+import { research } from "./research";
 import { setRally } from "./set_rally";
 import { stop } from "./stop";
 import { train } from "./train";
@@ -19,6 +20,7 @@ const HANDLERS: { [T in CommandType]: CommandHandler<T> } = {
   stop,
   train,
   set_rally: setRally,
+  research,
 };
 
 /** A command and the player who sent it (stamped by the server, never by the client). */

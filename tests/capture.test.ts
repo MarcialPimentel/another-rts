@@ -149,7 +149,7 @@ describe("capture points", () => {
     const p = sidePoint(w);
     place(w, 0, "line", p);
     run(w, 40);
-    const v = decodeSnapshot(JSON.parse(JSON.stringify(encodeSnapshot(w, GAME))), GAME.typeIds);
+    const v = decodeSnapshot(JSON.parse(JSON.stringify(encodeSnapshot(w, GAME))), GAME.typeIds, GAME.researchIds);
     const seen = v.entities.find((e) => e.id === p.id)!;
     expect(seen.owner).toBe(NEUTRAL);
     expect(seen.capture).toEqual({ by: 0, progress: 0.25 });

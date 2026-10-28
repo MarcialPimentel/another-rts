@@ -50,6 +50,12 @@ export interface PlayerState {
   id: number;
   gold: number;
   defeated: boolean;
+  /** Finished research ids, in the order they finished. */
+  researched: string[];
+  /** Research in progress at the HQ (one at a time), or null. */
+  researching: string | null;
+  /** Ticks spent on `researching`. */
+  researchProgress: number;
 }
 
 export interface World {
@@ -110,7 +116,14 @@ export function createWorld(game: CompiledGame = GAME, playerCount = game.map.ba
   };
   for (const point of game.map.points) spawnEntity(world, NEUTRAL, point.type, point.x, point.y, game);
   for (let p = 0; p < playerCount; p++) {
-    world.players.push({ id: p, gold: game.economy.startingGold, defeated: false });
+    world.players.push({
+      id: p,
+      gold: game.economy.startingGold,
+      defeated: false,
+      researched: [],
+      researching: null,
+      researchProgress: 0,
+    });
     const base = game.map.bases[p];
     if (!base) throw new Error(`Map has no base for player ${p}`);
     for (const start of base.entities) {
