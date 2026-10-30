@@ -1,21 +1,21 @@
 # Another RTS — Game Design Document
 
-Last updated 2026-10-28 · Owner: Marz
+_Current as of G4 · Camera and fog of war (2026-10-28); G5 · Win and pacing is next._
+
+Last updated 2026-10-30 · Owner: Marz
 
 > This file is the source of truth for Another RTS. If it disagrees with any other copy (chat drafts, docs elsewhere), this file wins.
 
-**Another RTS** is built from `MarcialPimentel/rts-template` v1.0 (the `upstream` remote). The Core sections below come from the template unchanged. The Game layer section describes this game: a short, shape-based RTS about trading off economy, army and tech.
+**Another RTS** is a short, shape-based two-player browser RTS about trading off economy, army and tech. Two commanders fight over a small map; every coin buys army, economy (capture points) or tech, and matches aim for 6–9 minutes. The design, pillars and systems are in [Game layer: Another RTS](#game-layer-another-rts-game-layer).
 
-## How to use this template
+## How this document is organised
 
-This is the reference design for every RTS built from this repo: a minimal two-player browser RTS that proves online multiplayer, plus the rules any future RTS must keep. The proof-of-concept game (one Town Hall, one Barracks, one Soldier) is deliberately small; the architecture is the product.
+Another RTS is built from `MarcialPimentel/rts-template` v1.0 (the `upstream` remote), so this document has two layers:
 
-The document has two layers:
+- **Core** (sections marked *Core*): architecture, simulation, commands, networking, project layout, deployment and testing. These rules come from the template and are shared with it. Changing a Core rule is a deliberate decision recorded in the Decision log, and fixes to them go in the template first.
+- **Game layer** (sections marked *Game layer*): this game's design: pillars, units, economy, tech, map, win condition and milestones.
 
-- **Template core** (sections marked *Core*): architecture, simulation, commands, networking, project layout, deployment and testing. Future games reuse these unchanged. Changing a Core rule is a deliberate decision recorded in the Decision log.
-- **Game layer** (sections marked *Game layer*): content, stats, map and win condition. Every new game replaces this layer.
-
-**Starting a new game from this template:** copy the repo, keep every Core section, rewrite the Game layer section, and add the new game's decisions to the Decision log.
+Two Core sections are kept as history from the template build: the proof-of-concept scope and the template milestones M1–M5. They describe how the shared foundation was built and proven, not this game's plan; this game's roadmap is in [Game milestones](#game-milestones).
 
 ### Rules for AI sessions
 
@@ -27,7 +27,9 @@ Any AI session working on this repo or a game built from it must:
 4. Keep each pull request to one milestone issue, and keep game content in data files rather than code.
 5. Update this document in the same pull request when a change affects anything it describes.
 
-## Proof of concept scope *(Core)*
+## Proof of concept scope *(Core, historical)*
+
+> Historical: this is the template's proof of concept (one Town Hall, one Barracks, one Soldier), finished on 2026-10-27 before Another RTS's own design. Current game design: [Game layer: Another RTS](#game-layer-another-rts-game-layer).
 
 The PoC is done when two people on different networks, each in a browser, can play a full match from lobby to victory screen with responsive controls and both seeing the same result.
 
@@ -196,7 +198,7 @@ Two commanders fight over a small map with shape-based armies. Every coin goes t
 3. **Systematic and modular.** Each mechanic is one system (or one data field) with its own tests and its own place in the tick order, added one milestone at a time. New units should be data, not code.
 4. **Short matches.** Target 6–9 minutes, hard ceiling 10. Prefer mechanics that force a result (map control, victory points) over ones that reward turtling.
 
-**Status (2026-10-28):** G1–G3 are built; G3 is ready to playtest. G4 (camera and fog of war) is built and ready to playtest. Sections below mark what is **built** and what is **planned**.
+**Status (2026-10-30):** G1–G4 are done; G5 · Win and pacing is next. Sections below mark what is **built** and what is **planned**.
 
 ### Army: four shapes and a counter loop *(built in G1)*
 
@@ -286,15 +288,15 @@ Until G5, the only win is destroying the enemy HQ (or a forfeit).
 
 ### Game milestones
 
-Each milestone ends in something to playtest, tracked on GitHub as a milestone with one issue per task.
+This table is the game's roadmap. Each milestone ends in something to playtest, tracked on GitHub as a [milestone](https://github.com/MarcialPimentel/another-rts/milestones?state=all) with one issue per task. What each finished milestone changed for players is in [CHANGELOG.md](../CHANGELOG.md).
 
-| Milestone | Scope | Playtest question |
-| --- | --- | --- |
-| G1 · Combat foundation | Armour and tag bonuses, the four units as data, shape rendering, attack and hit effects, train hotkeys Q/W/E/R | Do the counters feel right and read clearly? |
-| G2 · Capture points | Point entity, capture system, point income, 5-point map, point status in the HUD | Is the map worth fighting over? |
-| G3 · Tech | `research` command, tiers, `requires` on units, Weapons/Armour upgrades, Overclock | Is the army/economy/tech choice real? |
-| G4 · Camera and fog of war | Zoom, middle-drag pan, minimap; server-filtered snapshots, fog rendering | Does scouting and vision matter? |
-| G5 · Win and pacing | Victory points, match timer, balance pass (after fog, since fog changes balance) | Do matches end in 6–9 minutes? |
+| Milestone | Status | Scope | Playtest question |
+| --- | --- | --- | --- |
+| [G1 · Combat foundation](https://github.com/MarcialPimentel/another-rts/milestone/1) | Done | Armour and tag bonuses, the four units as data, shape rendering, attack and hit effects, train hotkeys Q/W/E/R | Do the counters feel right and read clearly? |
+| [G2 · Capture points](https://github.com/MarcialPimentel/another-rts/milestone/2) | Done | Point entity, capture system, point income, 5-point map, point status in the HUD | Is the map worth fighting over? |
+| [G3 · Tech](https://github.com/MarcialPimentel/another-rts/milestone/3) | Done | `research` command, tiers, `requires` on units, Weapons/Armour upgrades, Overclock | Is the army/economy/tech choice real? |
+| [G4 · Camera and fog of war](https://github.com/MarcialPimentel/another-rts/milestone/5) | Done | Zoom, middle-drag pan, minimap; server-filtered snapshots, fog rendering | Does scouting and vision matter? |
+| [G5 · Win and pacing](https://github.com/MarcialPimentel/another-rts/milestone/4) | **Current** | Victory points, match timer, balance pass (after fog, since fog changes balance) | Do matches end in 6–9 minutes? |
 
 These numbers are starting points for playtesting, not balanced values. They live in `shared/data/` and are tuned there.
 
@@ -311,7 +313,9 @@ another-rts/
   shared/                  imported by both client and server; no DOM, no Node APIs
     sim/
       world.ts             world state, entities, tick loop
-      systems/             income, production, targeting, movement, combat, deaths, win check
+      systems/             income, production, targeting, movement, combat, deaths, capture, win check
+      tech.ts              research effects (tiers and upgrades)
+      vision.ts            fog of war: what each player can see
       commands/            one module per command: validate and apply
     data/                  game layer: unit and building definitions, map, economy constants
     protocol.ts            message types, validation and the snapshot codec
@@ -331,12 +335,12 @@ Rules: `shared/` must run in both a browser and Node, so it uses no DOM or Node-
 
 ## Deployment *(Core; hosts are Game layer choices)*
 
-Both pieces deploy from `render.yaml` on every push to `main`: the client as a free static site that never sleeps, the server as a free Node web service reached at a `wss://` address set in one config value.
+Every push to `main` deploys both pieces: a GitHub Actions workflow publishes the client to marz.gg (with a backup copy on a Render static site from `render.yaml`), and the server redeploys on Render as a free Node web service reached at a `wss://` address set in one config value. Step by step: [deploy.md](deploy.md).
 
 | Piece | PoC host | Notes |
 | --- | --- | --- |
 | Web client | marz.gg/games/rts (SiteGround), published by `.github/workflows/deploy-marz.yml` on every push | Static files, so it loads instantly even while the server sleeps. Needs the four `SITEGROUND_*` repository secrets; skips until they're set |
-| Web client (mirror) | Render static site (`another-rts-client`) | Same build; handy if marz.gg is down |
+| Web client (backup) | Render static site (`another-rts-client`) | Backup copy only, same build; players use marz.gg. Handy if marz.gg is down |
 | Game server | Render free web service (`another-rts-server`) | Sleeps after 15 minutes idle; waking takes about a minute |
 | Fallback server | Own PC plus a free tunnel, or a ~$5/month VPS | `deploy/Dockerfile`; only the server URL changes |
 
@@ -351,7 +355,7 @@ Rules:
 
 Game rules are proven by headless tests that feed commands into the simulation and check the outcome, so AI-written changes are verified without manual play.
 
-- **Simulation tests (MUST, run on every push):** build a world, apply a scripted list of commands, run N ticks, assert on state. Examples: a `train` with too little gold is rejected; 10 Soldiers beat 5; a Town Hall at 0 HP ends the match; commands for another player's units are ignored.
+- **Simulation tests (MUST, run on every push):** build a world, apply a scripted list of commands, run N ticks, assert on state. Examples: a `train` with too little gold is rejected; 10 Line units beat 5; an HQ at 0 HP ends the match; commands for another player's units are ignored. (Some test names still use the template's words, such as "10 Soldiers beat 5" in `tests/scenarios.test.ts`.)
 - **Server integration tests (MUST, run on every push once networking exists):** start the real server, connect two scripted clients, create and join a room, play commands through to a result, and check both clients see the same world (through their own fog of war).
 - **Two-client local test (each networking PR):** run the server and two browser tabs on one machine, play a match, and confirm both screens agree.
 - **Latency test (before calling the PoC done):** play with 150 ms of added latency and confirm controls still feel responsive. Add `?lag=150` to the game URL to simulate it (half on send, half on receive). Measured 2026-10-25: markers, sound and pending trains appear within one frame; units start moving on screen about 255 ms after a click (150 ms round trip + 100 ms interpolation delay + up to one tick).
@@ -359,7 +363,9 @@ Game rules are proven by headless tests that feed commands into the simulation a
 
 Tests use Vitest and run in GitHub Actions on every push and pull request.
 
-## Milestones *(Core)*
+## Milestones *(Core, historical)*
+
+> Historical: these are the template's build milestones M1–M5 (done 2026-10-25 to 2026-10-27, tracked in the rts-template repo). This game's roadmap is [Game milestones](#game-milestones).
 
 Five milestones, each ending in something you can play or see, tracked on GitHub as one milestone with issues per task.
 
@@ -403,8 +409,9 @@ Future games grow the template through these planned seams, none of which change
 
 Record every change to a Core rule here, newest first, with the reason.
 
-| Date | Decision | Reason |
+| Date | Decision | Why |
 | --- | --- | --- |
+| 2026-10-30 | The Render static site (`another-rts-client`) stays as a backup copy of the client only; players use marz.gg/games/rts | Owner's call during the doc sync: marz.gg is the game's home, and the backup costs nothing if marz.gg is down |
 | 2026-10-28 | Fog of war (G4): **Core change** — snapshots are now filtered per player instead of the full state to both. Vision is each entity's radius plus `sight`; buildings got sight (HQ 350, Barracks 300). Enemy buildings always shown with last-seen HP; points always show ownership, and capture progress only in vision or on your own points. Enemy gold hidden, research public. The world remembers deaths for one second | Filtering on the server is the only cheat-proof fog. Reusing `sight` keeps one number per unit for "how far it notices" and "how far it sees". The death memory lets clients tell a kill (burst) from a unit leaving sight (fade), even if a frame skips a snapshot |
 | 2026-10-28 | New G4 · Camera and fog of war, before win and pacing (now G5). Camera zooms 0.5×–1.6× (out to the whole map fitting the window) with a minimap; map stays 2400 × 1000. Fog will be server-filtered snapshots, drawn as dimmed areas without a black unexplored layer | Owner's call. Zoom and a minimap let players manage the map in any browser window; fog makes scouting and vision matter. Fog changes balance (scouting and map vision now matter), so the balance pass waits for it. Filtering on the server is the only cheat-proof fog |
 | 2026-10-28 | Tech (G3): Tier 1 trains Line, Raider and Ranged; Tier 2 unlocks Siege, level 2 upgrades and Overclock. Weapons/Armour are ±15% per level, two levels each. Overclock needs Tier 2. New `research` command; research runs per player inside the production step (tick order unchanged) | Owner's calls. The GDD planned Tier 1 as Line and Raider only, but nothing at Tier 1 would then beat Line, so the opening would be "mass Line"; adding Ranged keeps the counter loop from minute one. Percentage upgrades keep counters intact at every level. Overclock behind Tier 2 makes Tier 2 the gateway to both late army and late economy |
@@ -427,4 +434,4 @@ Record every change to a Core rule here, newest first, with the reason.
 
 **Open questions:**
 
-- [ ] Render's free-tier limits are current as of October 2026 and change often; recheck before deploying (M4).
+- [ ] Render's free-tier limits (sleep after 15 minutes idle, monthly bandwidth) change often; recheck them if the server starts sleeping more or hitting limits.
