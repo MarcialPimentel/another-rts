@@ -1,10 +1,20 @@
 # Instructions for AI sessions
 
-This repo is Another RTS: a two-player browser RTS in TypeScript (Node server, Canvas client), built from `MarcialPimentel/rts-template` v1.0 (the `upstream` remote). Template fixes (networking, lobby, server loop, tooling, deploys) go in rts-template first and are pulled in here; game content goes only here. The owner reviews pull requests and playtests; he does not write the code himself.
+This repo is Another RTS: a short two-player browser RTS with shape-based armies, capture points and tech, in TypeScript (Node server, Canvas client), built from `MarcialPimentel/rts-template` v1.0 (the `upstream` remote). Template fixes (networking, lobby, server loop, tooling, deploys) go in rts-template first and are pulled in here; game content goes only here.
 
 ## Before doing anything
 
-Read `docs/GDD.md` in full. It is the source of truth. If a request conflicts with it, say so before acting.
+Read `docs/GDD.md` in full before any design or code decision. It is the source of truth. Check every change against its **design pillars** (Game layer section). If a request conflicts with the GDD, say so before acting.
+
+## How Marz works
+
+Marz (the owner) designs and playtests; he does not write the code. Give honest critique, including disagreement with his ideas, with reasons. He makes the final call.
+
+## Workflow
+
+- Work on a branch and open a pull request with playtest steps (what to try at https://marz.gg/games/rts/ once it ships).
+- Marz says "merge #N"; merge only that PR. Never push to `main` directly.
+- On this machine, run `gh` with `-R MarcialPimentel/another-rts`: without it, `gh` resolves to the `upstream` template repo.
 
 ## Non-negotiable rules (summary of the GDD's MUST rules)
 
@@ -31,3 +41,7 @@ Read `docs/GDD.md` in full. It is the source of truth. If a request conflicts wi
 - Add or update tests in `tests/` for any simulation or protocol change. `npm test` and `npm run typecheck` must pass before merging.
 - If a change affects anything the GDD describes, update `docs/GDD.md` in the same pull request.
 - If a task seems to require breaking a MUST rule, stop and explain why instead of working around it.
+
+## Where the docs are
+
+See `docs/README.md` for the full list: `docs/GDD.md` (design, rules, Decision log, milestones/roadmap), `CHANGELOG.md`, `docs/playtest.md`, `docs/deploy.md`. Private hosting details never go in tracked files.
