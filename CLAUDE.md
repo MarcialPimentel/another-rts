@@ -45,3 +45,27 @@ Marz (the owner) designs and playtests; he does not write the code. Give honest 
 ## Where the docs are
 
 See `docs/README.md` for the full list: `docs/GDD.md` (design, rules, Decision log, milestones/roadmap), `CHANGELOG.md`, `docs/playtest.md`, `docs/deploy.md`. Private hosting details never go in tracked files.
+
+## Ship and build notes
+
+_Read by the `ship`, `next-build` and `prod-run` skills, which keep no per-game notes of their own. Keep this section current when the deploy or build process changes._
+
+### Shipping (merge, deploy, live check)
+
+- **Default branch:** `main`. **Merge style:** squash.
+- **Deploy:** two parts.
+  - Client: `deploy-marz.yml` ("Deploy client to marz.gg") builds and uploads to marz.gg/games/rts over SSH. If it says the SiteGround secrets aren't set, the upload skipped: that's a failure to report.
+  - Server: Render auto-deploys `another-rts-server` from `main` (not a GitHub workflow; takes a few minutes, longer if the free-tier server was asleep).
+- **Live check:** both must report `<sha7>`:
+  - Server: `curl -s -m 90 https://another-rts-server.onrender.com/healthz` → `{"ok":true,"build":"<sha7>",...}`. The first call may take up to a minute while it wakes. Retry every 30s for up to ~8 minutes while Render deploys.
+  - Client: find the bundle in `curl -s https://marz.gg/games/rts/` (`assets/index-*.js`) and `grep -o <sha7>` in it.
+  - If they don't match, players get the "please refresh" message: report which one is behind.
+- **Playtest link:** https://marz.gg/games/rts/ (two browser tabs make a 2-player test).
+
+### Planning and building the next build
+
+- **Where the next build comes from:** GitHub milestones G1–G4 (G1 Combat foundation, G2 Capture points, G3 Tech, G4 Win and pacing) and their issues; `docs/GDD.md` (Game layer) is the source of truth.
+- **Template rule:** fixes to the template core (networking, lobby, server loop, tooling, deploys) go to `rts-template` first and are pulled in here (`upstream` remote). Only game content is built directly here. If a build item is really a core fix, say so and propose doing it in rts-template.
+- **Branch / PR:** one PR per milestone issue, branch `g<N>/<slug>`, `Closes #N`. Squash-merged.
+- **Before the PR:** `npm run typecheck` and `npm test`, with tests in `tests/` for any simulation or protocol change. Two-tab playtest locally with `npm run dev` if possible.
+- **Docs in the same PR:** `docs/GDD.md` (and its Decision log) for anything it describes.
